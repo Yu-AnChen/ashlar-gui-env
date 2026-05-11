@@ -1064,20 +1064,24 @@ def launch_gui():
 
         # precompute log + output paths so the viewer can open immediately
         active_log_paths.clear()
-        for slide in subset:
-            if "cycle_files" in slide:
-                slide_name = slide["sample"]
-                out_p = Path(output_dir).resolve() if output_dir else Path.cwd()
-            else:
-                slide_dir = Path(slide["Directory"].strip().strip('"')).resolve()
-                slide_name = slide_dir.name
-                out_p = Path(output_dir).resolve() if output_dir else slide_dir.parent
-            active_log_paths.append(
-                (
-                    out_p / f"{slide_name}-ashlar.log",
-                    out_p / f"{slide_name}.ome.tif",
+        try:
+            for slide in subset:
+                if "cycle_files" in slide:
+                    slide_name = slide["sample"]
+                    out_p = Path(output_dir).resolve() if output_dir else Path.cwd()
+                else:
+                    slide_dir = Path(slide["Directory"].strip().strip('"')).resolve()
+                    slide_name = slide_dir.name
+                    out_p = Path(output_dir).resolve() if output_dir else slide_dir.parent
+                active_log_paths.append(
+                    (
+                        out_p / f"{slide_name}-ashlar.log",
+                        out_p / f"{slide_name}.ome.tif",
+                    )
                 )
-            )
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            return
 
         log_text.configure(state="normal")
         log_text.delete("1.0", "end")

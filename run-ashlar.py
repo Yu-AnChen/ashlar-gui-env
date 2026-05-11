@@ -214,37 +214,41 @@ def make_samplesheet(batch_dir, output_dir, file_type="rcpnl"):
     return out_path, samples, skipped
 
 
-def _generate_ffp(cycle_files, slide_dir, file_type, fiji_path, dry_run=False):
-    illum_dir = slide_dir / "illumination_profiles"
+_BASICPY_PYTHON = Path(__file__).parent / "basicpy-env" / ".pixi" / "envs" / "default" / (
+    "Scripts/python.exe" if platform.system() == "Windows" else "bin/python"
+)
+_BASICPY_MAIN = Path(__file__).parent / "basicpy-env" / "main.py"
+
+
+def _generate_ffp(cycle_files, illum_dir, file_type, dry_run=False):
+    """Generate flat-field profiles using basicpy. Returns list of ffp paths, or None on error."""
+    if not _BASICPY_PYTHON.exists():
+        logging.warning(
+            f"basicpy env not found at {_BASICPY_PYTHON}. "
+            "Run: pixi install --locked --manifest-path basicpy-env/pixi.toml"
+        )
+        return None
+
+    illum_dir.mkdir(exist_ok=True)
     ffp_list = []
     for cycle_file in cycle_files:
         stem = cycle_file.name.replace(f".{file_type}", "")
-        ffp_name = f"{stem}-ffp.tif"
-        ffp_path = illum_dir / ffp_name
+        ffp_path = illum_dir / f"{stem}-ffp.ome.tif"
         if ffp_path.exists():
-            logging.info(f"    FFP exists: {ffp_name}")
+            logging.info(f"    FFP exists: {ffp_path.name}")
         else:
-            logging.info(f"    Generating FFP: {ffp_name}")
+            logging.info(f"    Generating FFP: {ffp_path.name}")
             if not dry_run:
-                illum_dir.mkdir(exist_ok=True)
-                plugin = (
-                    Path(fiji_path).parent
-                    / "plugins"
-                    / "imagej_basic_ashlar_ffp_only.py"
-                )
-                subprocess.run(
-                    [
-                        str(fiji_path),
-                        "--ij2",
-                        "--headless",
-                        "--run",
-                        str(plugin),
-                        f"filename='{cycle_file}', output_dir='{illum_dir}',"
-                        f" experiment_name='{stem}', lambda_flat=0.1, lambda_dark=0.01",
-                    ],
-                    shell=False,
-                    check=True,
-                )
+                # Forward-slash paths avoid pixi UNC path mangling on Windows
+                cmd = [
+                    str(_BASICPY_PYTHON),
+                    str(_BASICPY_MAIN),
+                    "-i", str(cycle_file).replace("\\", "/"),
+                    "-o", str(illum_dir).replace("\\", "/"),
+                    "--output-flatfield", stem,
+                    "--output-darkfield", stem,
+                ]
+                subprocess.run(cmd, shell=False, check=True)
         ffp_list.append(str(ffp_path))
     return ffp_list
 
@@ -294,7 +298,6 @@ def process_slide(
     slide,
     *,
     markers_names=None,
-    fiji_path=None,
     dry_run=False,
     skip_existing=False,
     maximum_shift=30,
@@ -370,19 +373,14 @@ def process_slide(
     if _text_to_bool(slide.get("Correction", "")):
         # for mcmicro format slide_dir is None; use out_parent as the FFP base instead
         ffp_base = slide_dir if slide_dir is not None else out_parent
-        if not fiji_path:
-            logging.warning(
-                f"[{slide_name}] Correction requested but --fiji-path not set"
-            )
-        elif detected_type not in ("rcpnl", "xdce", "pysed.ome.tif"):
+        illum_dir = ffp_base / "illumination_profiles"
+        if detected_type not in ("rcpnl", "xdce", "pysed.ome.tif"):
             logging.warning(
                 f"[{slide_name}] Correction skipped — cannot determine file type "
                 f"(got '{detected_type}')"
             )
         else:
-            ffp_list = _generate_ffp(
-                cycle_files, ffp_base, detected_type, fiji_path, dry_run
-            )
+            ffp_list = _generate_ffp(cycle_files, illum_dir, detected_type, dry_run)
 
     # build ashlar command
     # pyramidal OME-TIFF output is automatic when -o ends in .ome.tif
@@ -535,12 +533,6 @@ def _build_parser():
         help="directory for output OME-TIFFs (default: next to each slide folder)",
     )
     p.add_argument(
-        "--fiji-path",
-        metavar="PATH",
-        default="C:/Users/Public/Downloads/Fiji.app/ImageJ-win64.exe",
-        help="Fiji executable path (default: C:/Users/Public/Downloads/Fiji.app/ImageJ-win64.exe)",
-    )
-    p.add_argument(
         "--max-n-jobs",
         type=int,
         default=1,
@@ -645,7 +637,6 @@ def cli_main(argv=None):
             max_n_jobs=args.max_n_jobs,
             cancel_event=cancel_event,
             markers_names=markers_names,
-            fiji_path=args.fiji_path,
             dry_run=args.dry_run,
             skip_existing=args.skip_existing,
             maximum_shift=args.maximum_shift,
@@ -679,7 +670,6 @@ def launch_gui():
     fmt_var = tk.StringVar(value="directory")
     markers_var = tk.StringVar()
     output_dir_var = tk.StringVar()
-    fiji_var = tk.StringVar(value="C:/Users/Public/Downloads/Fiji.app/ImageJ-win64.exe")
     from_var = tk.IntVar(value=0)
     to_var = tk.StringVar(value="")
     jobs_var = tk.IntVar(value=1)
@@ -694,7 +684,7 @@ def launch_gui():
     root.columnconfigure(0, weight=1)
     root.rowconfigure(0, weight=1)
     frm.columnconfigure(1, weight=1)
-    frm.rowconfigure(10, weight=1)
+    frm.rowconfigure(9, weight=1)
 
     def _file_row(row, label, var, filetypes):
         ttk.Label(frm, text=label).grid(row=row, column=0, sticky="w", pady=2)
@@ -835,10 +825,9 @@ def launch_gui():
 
     _file_row(5, "Markers CSV", markers_var, [("CSV", "*.csv"), ("All", "*.*")])
     _dir_row(6, "Output directory", output_dir_var)
-    _file_row(7, "Fiji executable", fiji_var, [("All", "*.*")])
 
     opts = ttk.Frame(frm)
-    opts.grid(row=8, column=0, columnspan=3, sticky="w", pady=6)
+    opts.grid(row=7, column=0, columnspan=3, sticky="w", pady=6)
 
     ttk.Label(opts, text="From slide").pack(side="left", padx=(0, 2))
     ttk.Spinbox(opts, textvariable=from_var, from_=0, to=9999, width=5).pack(
@@ -871,16 +860,16 @@ def launch_gui():
     ttk.Checkbutton(opts, text="Skip existing", variable=skip_var).pack(side="left")
 
     ttk.Separator(frm, orient="horizontal").grid(
-        row=9, column=0, columnspan=3, sticky="ew", pady=6
+        row=8, column=0, columnspan=3, sticky="ew", pady=6
     )
 
     log_text = scrolledtext.ScrolledText(
         frm, height=18, width=84, state="disabled", font=(_mono, 9)
     )
-    log_text.grid(row=10, column=0, columnspan=3, sticky="nsew", pady=(0, 6))
+    log_text.grid(row=9, column=0, columnspan=3, sticky="nsew", pady=(0, 6))
 
     prog = ttk.Progressbar(frm, mode="indeterminate")
-    prog.grid(row=11, column=0, columnspan=3, sticky="ew", pady=(0, 6))
+    prog.grid(row=10, column=0, columnspan=3, sticky="ew", pady=(0, 6))
 
     # shared state for the log viewer
     active_log_paths = []  # (log_path, out_tif_path) per slide in current batch
@@ -978,7 +967,7 @@ def launch_gui():
         win.after(100, _poll_files)
 
     btn_bar = ttk.Frame(frm)
-    btn_bar.grid(row=12, column=0, columnspan=3, pady=(0, 2))
+    btn_bar.grid(row=11, column=0, columnspan=3, pady=(0, 2))
     btn_run = ttk.Button(btn_bar, text="Run ashlar")
     btn_run.pack(side="left", padx=(0, 8))
     btn_cancel = ttk.Button(btn_bar, text="Cancel", state="disabled")
@@ -1071,7 +1060,6 @@ def launch_gui():
                 messagebox.showerror("Markers error", str(e))
                 return
 
-        fiji = fiji_var.get().strip().strip('"') or None
         output_dir = output_dir_var.get().strip().strip('"') or None
         if fmt == "mcmicro" and not output_dir:
             messagebox.showerror(
@@ -1118,7 +1106,6 @@ def launch_gui():
                     max_n_jobs=jobs_var.get(),
                     cancel_event=cancel_event,
                     markers_names=markers_names,
-                    fiji_path=fiji,
                     dry_run=dry_var.get(),
                     skip_existing=skip_var.get(),
                     maximum_shift=margin_var.get(),

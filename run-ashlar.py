@@ -218,30 +218,34 @@ _BASICPY_MANIFEST = Path(__file__).parent / "basicpy-env" / "pixi.toml"
 _BASICPY_MAIN = Path(__file__).parent / "basicpy-env" / "main.py"
 
 
+def _unc(path):
+    """Convert backslashes to forward slashes for reliable UNC path handling on Windows."""
+    return str(path).replace("\\", "/")
+
+
 def _generate_ffp(cycle_files, illum_dir, file_type, dry_run=False):
     """Generate flat-field profiles using basicpy. Returns list of ffp paths."""
-    Path(str(illum_dir)).mkdir(exist_ok=True)
+    Path(_unc(illum_dir)).mkdir(exist_ok=True)
     ffp_list = []
     for cycle_file in cycle_files:
         stem = cycle_file.name.replace(f".{file_type}", "")
-        ffp_path = Path(str(illum_dir / f"{stem}-ffp.ome.tif"))
+        ffp_path = Path(_unc(illum_dir / f"{stem}-ffp.ome.tif"))
         if ffp_path.exists():
             logging.info(f"    FFP exists: {ffp_path.name}")
         else:
             logging.info(f"    Generating FFP: {ffp_path.name}")
             if not dry_run:
-                # Forward-slash paths avoid pixi UNC path mangling on Windows
                 cmd = [
                     "pixi", "run",
                     "--manifest-path", str(_BASICPY_MANIFEST),
                     "python", str(_BASICPY_MAIN),
-                    "-i", str(cycle_file),
-                    "-o", str(illum_dir),
+                    "-i", _unc(cycle_file),
+                    "-o", _unc(illum_dir),
                     "--output-flatfield", stem,
                     "--output-darkfield", stem,
                 ]
                 subprocess.run(cmd, shell=False, check=True)
-        ffp_list.append(str(ffp_path))
+        ffp_list.append(_unc(ffp_path))
     return ffp_list
 
 

@@ -214,21 +214,12 @@ def make_samplesheet(batch_dir, output_dir, file_type="rcpnl"):
     return out_path, samples, skipped
 
 
-_BASICPY_PYTHON = Path(__file__).parent / "basicpy-env" / ".pixi" / "envs" / "default" / (
-    "Scripts/python.exe" if platform.system() == "Windows" else "bin/python"
-)
+_BASICPY_MANIFEST = Path(__file__).parent / "basicpy-env" / "pixi.toml"
 _BASICPY_MAIN = Path(__file__).parent / "basicpy-env" / "main.py"
 
 
 def _generate_ffp(cycle_files, illum_dir, file_type, dry_run=False):
-    """Generate flat-field profiles using basicpy. Returns list of ffp paths, or None on error."""
-    if not _BASICPY_PYTHON.exists():
-        logging.warning(
-            f"basicpy env not found at {_BASICPY_PYTHON}. "
-            "Run: pixi install --locked --manifest-path basicpy-env/pixi.toml"
-        )
-        return None
-
+    """Generate flat-field profiles using basicpy. Returns list of ffp paths."""
     illum_dir.mkdir(exist_ok=True)
     ffp_list = []
     for cycle_file in cycle_files:
@@ -241,8 +232,9 @@ def _generate_ffp(cycle_files, illum_dir, file_type, dry_run=False):
             if not dry_run:
                 # Forward-slash paths avoid pixi UNC path mangling on Windows
                 cmd = [
-                    str(_BASICPY_PYTHON),
-                    str(_BASICPY_MAIN),
+                    "pixi", "run",
+                    "--manifest-path", str(_BASICPY_MANIFEST),
+                    "python", str(_BASICPY_MAIN),
                     "-i", str(cycle_file).replace("\\", "/"),
                     "-o", str(illum_dir).replace("\\", "/"),
                     "--output-flatfield", stem,

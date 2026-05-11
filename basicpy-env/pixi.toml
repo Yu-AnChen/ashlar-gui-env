@@ -5,6 +5,7 @@ platforms = ["win-64"]
 version = "0.1.0"
 
 [tasks]
+setup-basicpy = "python populate_scyjava_cache.py"
 
 [dependencies]
 python = "3.10.*"

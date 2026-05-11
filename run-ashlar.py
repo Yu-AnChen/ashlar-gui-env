@@ -220,11 +220,11 @@ _BASICPY_MAIN = Path(__file__).parent / "basicpy-env" / "main.py"
 
 def _generate_ffp(cycle_files, illum_dir, file_type, dry_run=False):
     """Generate flat-field profiles using basicpy. Returns list of ffp paths."""
-    illum_dir.mkdir(exist_ok=True)
+    Path(str(illum_dir).replace("\\", "/")).mkdir(exist_ok=True)
     ffp_list = []
     for cycle_file in cycle_files:
         stem = cycle_file.name.replace(f".{file_type}", "")
-        ffp_path = illum_dir / f"{stem}-ffp.ome.tif"
+        ffp_path = Path(str(illum_dir / f"{stem}-ffp.ome.tif").replace("\\", "/"))
         if ffp_path.exists():
             logging.info(f"    FFP exists: {ffp_path.name}")
         else:

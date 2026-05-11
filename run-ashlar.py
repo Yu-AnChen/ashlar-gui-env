@@ -220,11 +220,11 @@ _BASICPY_MAIN = Path(__file__).parent / "basicpy-env" / "main.py"
 
 def _generate_ffp(cycle_files, illum_dir, file_type, dry_run=False):
     """Generate flat-field profiles using basicpy. Returns list of ffp paths."""
-    Path(str(illum_dir).replace("\\", "/")).mkdir(exist_ok=True)
+    Path(str(illum_dir)).mkdir(exist_ok=True)
     ffp_list = []
     for cycle_file in cycle_files:
         stem = cycle_file.name.replace(f".{file_type}", "")
-        ffp_path = Path(str(illum_dir / f"{stem}-ffp.ome.tif").replace("\\", "/"))
+        ffp_path = Path(str(illum_dir / f"{stem}-ffp.ome.tif"))
         if ffp_path.exists():
             logging.info(f"    FFP exists: {ffp_path.name}")
         else:
@@ -235,8 +235,8 @@ def _generate_ffp(cycle_files, illum_dir, file_type, dry_run=False):
                     "pixi", "run",
                     "--manifest-path", str(_BASICPY_MANIFEST),
                     "python", str(_BASICPY_MAIN),
-                    "-i", str(cycle_file).replace("\\", "/"),
-                    "-o", str(illum_dir).replace("\\", "/"),
+                    "-i", str(cycle_file),
+                    "-o", str(illum_dir),
                     "--output-flatfield", stem,
                     "--output-darkfield", stem,
                 ]
@@ -1080,7 +1080,7 @@ def launch_gui():
                     )
                 )
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            messagebox.showerror("Error", f"{type(e).__name__}: {e}")
             return
 
         log_text.configure(state="normal")

@@ -1,0 +1,19 @@
+[workspace]
+channels = ["conda-forge"]
+name = "basicpy"
+platforms = ["win-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = "3.10.*"
+openjdk = ">=21,<22"
+
+[pypi-dependencies]
+bioio-bioformats = "==1.3.2"
+basicpy = "==2.0.0"
+bioio=">=3.0.0"
+imagecodecs=">=2025.3.30"
+numpy=">=1.26.4"
+scikit-image=">=0.21.0"

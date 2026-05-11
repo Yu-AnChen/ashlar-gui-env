@@ -1,0 +1,5 @@
+example-dataset
+
+\\research.files.med.harvard.edu\HITS\lsp-data\cycif-production\16-Pre-Cancer-Atlas-for-Melanoma\P16_Oxidative_CyCIF
+
+\\research.files.med.harvard.edu\HITS\lsp-data\cycif-production\17-tuberculosis-aldridge\p17e46_LUAD_3D

@@ -223,11 +223,14 @@ def _unc(path):
     return str(path).replace("\\", "/")
 
 
-def _generate_ffp(cycle_files, illum_dir, file_type, dry_run=False):
+def _generate_ffp(cycle_files, illum_dir, file_type, dry_run=False, cancel_event=None):
     """Generate flat-field profiles using basicpy. Returns list of ffp paths."""
-    Path(_unc(illum_dir)).mkdir(exist_ok=True)
+    Path(_unc(illum_dir)).mkdir(exist_ok=True, parents=True)
     ffp_list = []
     for cycle_file in cycle_files:
+        if cancel_event and cancel_event.is_set():
+            logging.info("    FFP generation cancelled")
+            break
         stem = cycle_file.name.replace(f".{file_type}", "")
         ffp_path = Path(_unc(illum_dir / f"{stem}-ffp.ome.tif"))
         if ffp_path.exists():
@@ -244,7 +247,15 @@ def _generate_ffp(cycle_files, illum_dir, file_type, dry_run=False):
                     "--output-flatfield", stem,
                     "--output-darkfield", stem,
                 ]
-                subprocess.run(cmd, shell=False, check=True)
+                proc = subprocess.Popen(cmd, shell=False)
+                while proc.poll() is None:
+                    if cancel_event and cancel_event.is_set():
+                        proc.terminate()
+                        logging.info("    FFP generation cancelled")
+                        return ffp_list
+                    time.sleep(0.5)
+                if proc.returncode != 0:
+                    raise subprocess.CalledProcessError(proc.returncode, cmd)
         ffp_list.append(_unc(ffp_path))
     return ffp_list
 
@@ -376,7 +387,7 @@ def process_slide(
                 f"(got '{detected_type}')"
             )
         else:
-            ffp_list = _generate_ffp(cycle_files, illum_dir, detected_type, dry_run)
+            ffp_list = _generate_ffp(cycle_files, illum_dir, detected_type, dry_run, cancel_event)
 
     # build ashlar command
     # pyramidal OME-TIFF output is automatic when -o ends in .ome.tif
@@ -835,7 +846,7 @@ def launch_gui():
     for label, var, lo, hi, inc, w in [
         ("Max jobs", jobs_var, 1, 64, 1, 4),
         ("Max shift µm", margin_var, 0, 500, 5, 5),
-        ("Filter σ", sigma_var, 0, 10, 0.5, 4),
+        ("Filter sigma", sigma_var, 0, 10, 0.5, 4),
     ]:
         ttk.Label(opts, text=label).pack(side="left", padx=(0, 2))
         ttk.Spinbox(

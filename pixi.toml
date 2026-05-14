@@ -6,6 +6,7 @@ platforms = ["osx-arm64", "win-64", "linux-64"]
 version = "0.1.0"
 
 [tasks]
+gui = "python run-ashlar.py --gui"
 install-basicpy = "pixi install --locked --manifest-path basicpy-env/pixi.toml"
 setup-basicpy = "pixi run --manifest-path basicpy-env/pixi.toml setup-basicpy"
 

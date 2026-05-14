@@ -6,28 +6,58 @@ Includes a graphical interface for point-and-click operation.
 
 ## Installation
 
-This project uses [pixi](https://pixi.sh) to manage the environment. Install
-pixi, then run once inside this folder:
+This project uses [pixi](https://pixi.sh) to manage the environment.
+
+### 1 — Install git (Windows only)
+
+ashlar is installed directly from GitHub, so git must be available during
+`pixi install`. Windows does not ship with git. Install it temporarily via pixi:
+
+```sh
+pixi global install git
+```
+
+You can uninstall it once installation is complete:
+
+```sh
+pixi global remove git
+```
+
+### 2 — Install the main environment
+
+Run once inside this folder:
 
 ```sh
 pixi install --locked
 ```
 
-That installs Python 3.10, ashlar (from source), and all dependencies into an
+This installs Python 3.10, ashlar (from source), and all dependencies into an
 isolated environment.
+
+### 3 — Install and set up the basicpy environment
+
+Flat-field correction uses a separate pixi environment. Install and warm up its
+BioFormats cache with two commands (also defined as pixi tasks):
+
+```sh
+pixi run install-basicpy
+pixi run setup-basicpy
+```
+
+`setup-basicpy` downloads BioFormats JARs on first run — this takes a minute or
+two and only needs to happen once.
+
+---
 
 ## Quick start — GUI
 
-Launch the GUI with pixi:
+**Windows:** double-click `run-ashlar.bat`.
+
+**macOS / Linux:** double-click `run-ashlar.sh` (or right-click → Open on
+macOS the first time), or run:
 
 ```sh
-pixi run python run-ashlar.py
-```
-
-or, if the environment is already activated (`pixi shell`):
-
-```sh
-python run-ashlar.py
+pixi run gui
 ```
 
 The window that opens contains everything needed to run a batch.
@@ -38,12 +68,11 @@ The window that opens contains everything needed to run a batch.
 
 ### Input fields
 
-| Field                | Required | Description                                                    |
-| -------------------- | -------- | -------------------------------------------------------------- |
-| **Config CSV**       | Yes      | CSV listing the slides to process (see format below)           |
-| **Markers CSV**      | No       | One channel name per line; written into the output OME-TIFF    |
-| **Output directory** | No       | Where output files go. Defaults to next to each slide folder   |
-| **Fiji executable**  | No       | Only needed when flat-field correction is requested in the CSV |
+| Field                | Required | Description                                                  |
+| -------------------- | -------- | ------------------------------------------------------------ |
+| **Config CSV**       | Yes      | CSV listing the slides to process (see format below)         |
+| **Markers CSV**      | No       | One channel name per line; written into the output OME-TIFF  |
+| **Output directory** | No       | Where output files go. Defaults to next to each slide folder |
 
 Paths can be typed directly, pasted with Windows *Copy as path* (surrounding
 quotes are stripped automatically), or picked with the **…** browse button.
@@ -90,10 +119,10 @@ exact command used, and all output.
 
 The CSV must have a header row. Two columns are used:
 
-| Column       | Required | Description                                                        |
-| ------------ | -------- | ------------------------------------------------------------------ |
-| `Directory`  | Yes      | Path to the slide folder                                           |
-| `Correction` | No       | Set to `1`, `yes`, or `true` to run flat-field correction via Fiji |
+| Column       | Required | Description                                                           |
+| ------------ | -------- | --------------------------------------------------------------------- |
+| `Directory`  | Yes      | Path to the slide folder                                              |
+| `Correction` | No       | Set to `1`, `yes`, or `true` to run flat-field correction via basicpy |
 
 Example:
 
@@ -156,6 +185,14 @@ configured output directory):
 | `<slide-name>.ome.tif`    | Pyramidal OME-TIFF produced by ashlar      |
 | `<slide-name>-ashlar.log` | Full ashlar log (version, command, output) |
 
+When flat-field correction is enabled, illumination profiles are written to an
+`illumination_profiles/` folder next to the slide folder:
+
+| File                       | Description        |
+| -------------------------- | ------------------ |
+| `<cycle-name>-ffp.ome.tif` | Flat-field profile |
+| `<cycle-name>-dfp.ome.tif` | Dark-field profile |
+
 ---
 
 ## add-channel-name.py — batch-add channel names to existing OME-TIFFs
@@ -172,10 +209,10 @@ pixi run python add-channel-name.py
 
 ### Inputs
 
-| Field | Description |
-| ----- | ----------- |
-| **OME-TIFF directory** | Folder containing `.ome.tif` files to update |
-| **Markers CSV** | Same format as above — one channel name per line, no header |
+| Field                  | Description                                                 |
+| ---------------------- | ----------------------------------------------------------- |
+| **OME-TIFF directory** | Folder containing `.ome.tif` files to update                |
+| **Markers CSV**        | Same format as above — one channel name per line, no header |
 
 Windows `.lnk` shortcuts pointing to `.ome.tif` files inside the directory are
 resolved automatically.
@@ -201,4 +238,3 @@ pixi run python run-ashlar.py slides.csv --markers markers.csv --max-n-jobs 4
 ```
 
 Run `pixi run python run-ashlar.py --help` for all options.
-m

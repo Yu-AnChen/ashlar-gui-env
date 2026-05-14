@@ -71,20 +71,25 @@ def _find_cycle_files(slide_dir, file_type=None):
     When file_type is given (e.g. 'pysed.ome.tif'), only that suffix is searched.
     Otherwise auto-detects: tries 'rcpnl' then 'xdce'.
     Searches directly in slide_dir, one level of real subdirectories, and any
-    subdirectories reached via Windows .lnk shortcuts.
+    subdirectories reached via Windows .lnk shortcuts. All .lnk files are
+    resolved by target path, not by shortcut filename, so names like
+    'cycle1.rcpnl - Shortcut.lnk' are handled correctly.
     """
     shortcut_dirs = []
-    for lnk in slide_dir.glob("*.lnk"):
+    shortcut_files = []
+    for lnk in [*slide_dir.glob("*.lnk"), *slide_dir.glob("*/*.lnk")]:
         resolved = _resolve_shortcut(lnk)
         if resolved.is_dir():
             shortcut_dirs.append(resolved)
+        elif resolved.is_file():
+            shortcut_files.append(resolved)
 
     for ftype in ([file_type] if file_type else ("rcpnl", "xdce")):
         real = [*slide_dir.glob(f"*.{ftype}"), *slide_dir.glob(f"*/*.{ftype}")]
-        lnks = [*slide_dir.glob(f"*.{ftype}.lnk"), *slide_dir.glob(f"*/*.{ftype}.lnk")]
+        from_shortcut_files = [f for f in shortcut_files if str(f).lower().endswith(f".{ftype}")]
         from_shortcut_dirs = [f for d in shortcut_dirs for f in d.glob(f"*.{ftype}")]
         files = sorted(
-            {*real, *(_resolve_shortcut(p) for p in lnks), *from_shortcut_dirs},
+            {*real, *from_shortcut_files, *from_shortcut_dirs},
             key=lambda p: p.name,
         )
         if files:

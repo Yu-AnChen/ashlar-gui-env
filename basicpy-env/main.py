@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
 import argparse
 import logging
-from argparse import ArgumentParser as AP
 import os
+from argparse import ArgumentParser as AP
 from os.path import splitext
 from pathlib import Path
 
-import dask
-import numpy as np
 import bioio_bioformats
-from basicpy import BaSiC
+import cv2
+import dask
+import dask.diagnostics
+import numpy as np
 import scyjava
 import tifffile
+import torch
+import torch.nn.functional as F
+from basicpy import BaSiC
 
+scyjava.config.add_option("-Xmx6g")
 
 logging.basicConfig(
     format="%(asctime)s.%(msecs)03d %(name)-20s %(levelname)-8s : %(message)s",
@@ -198,6 +203,16 @@ def get_args():
     return arg
 
 
+def _resize_back(img, height, width):
+
+    return F.interpolate(
+        torch.from_numpy(img)[None, None],  # (1, 1, H, W)
+        size=(height, width),
+        mode="bilinear",
+        align_corners=True,  # match BaSiCPy's own call
+    )[0, 0].numpy()
+
+
 def main(args):
 
     # Run BASIC
@@ -209,64 +224,70 @@ def main(args):
         fitting_mode=args.fitting_mode,
         get_darkfield=args.darkfield,
         sort_intensity=args.sort_intensity,
-        # resize_mode='skimage_dask',
     )
 
     # Initialize flatfields and darkfields
     flatfields = []
     darkfields = []
 
-    if 'BASICPY_DOCKER_MCMICRO' in os.environ:
+    if "BASICPY_DOCKER_MCMICRO" in os.environ:
         # If we're running inside our own container, configure scyjava to use
         # our custom location for maven and jgo to stash their files. (jgo and
         # maven should already be configured via environment variables)
         # Otherwise leave the scyjava defaults alone so the script is usable
         # outside the container as well.
-        container_scyjava_base = Path('/opt/scyjava')
-        scyjava.config.set_cache_dir(container_scyjava_base / '.jgo')
-        scyjava.config.set_m2_repo(container_scyjava_base / '.m2' / 'repository')
+        container_scyjava_base = Path("/opt/scyjava")
+        scyjava.config.set_cache_dir(container_scyjava_base / ".jgo")
+        scyjava.config.set_m2_repo(container_scyjava_base / ".m2" / "repository")
 
-    dask.config.set(scheduler='synchronous')
+    # dask.config.set(scheduler="synchronous")
 
     # Check if input is a folder or a file
     if args.input.is_file():
         logger.info(f"opening image at {args.input}")
         image = bioio_bioformats.Reader(args.input)
-        if image.dims.order not in ('TCZYX', 'MTCZYX'):
-            raise RuntimeError(
-                f"Unexpected image dimension order: {image.dims.order}"
-            )
+        if image.dims.order not in ("TCZYX", "MTCZYX"):
+            raise RuntimeError(f"Unexpected image dimension order: {image.dims.order}")
         istack = image.get_xarray_dask_stack(
             drop_non_matching_scenes=True,
-            scene_character='M',
+            scene_character="M",
         )
-        if istack.dims != ('M', 'T', 'C', 'Z', 'Y', 'X'):
-            raise RuntimeError(
-                f"Unexpected stack dimension order: {istack.dims}"
-            )
-        istack = istack.stack(I=('M', 'T', 'Z')).transpose('C', 'I', 'Y', 'X')
-        if len(istack.coords['I']) < 2 and not args.ignore_single_image_error:
+        if istack.dims != ("M", "T", "C", "Z", "Y", "X"):
+            raise RuntimeError(f"Unexpected stack dimension order: {istack.dims}")
+        istack = istack.stack(I=("M", "T", "Z")).transpose("C", "I", "Y", "X")
+        if len(istack.coords["I"]) < 2 and not args.ignore_single_image_error:
             raise RuntimeError(
                 "The image is single sited. Was it saved in the correct way?"
             )
         for c, channel_stack in enumerate(istack, 1):
-            logger.info(f'Begin processing channel {c}')
+            logger.info(f"Begin processing channel {c}")
             channel_data = channel_stack.data
+            _, H, W = channel_data.shape
+
+            with dask.diagnostics.ProgressBar():
+                channel_data = channel_data.map_blocks(
+                    lambda x: cv2.resize(
+                        np.squeeze(x), dsize=(128, 128), interpolation=cv2.INTER_AREA
+                    )[np.newaxis],
+                    name=False,
+                ).compute()
+
             if not args.no_autotune:
-                logger.info('Autotuning parameters')
-                channel_data = channel_data.compute()
+                logger.info("Autotuning parameters")
                 basic.autotune(
                     channel_data,
                     fourier_l0_norm_cost_coef=args.autotune_fourier_l0_norm_cost_coef,
                 )
-            logger.info('Generating illumination correction profiles')
+            logger.info("Generating illumination correction profiles")
             basic.fit(channel_data)
-            flatfields.append(basic.flatfield)
-            darkfields.append(basic.darkfield)
-            logger.info(f'End processing channel {c}')
+            flatfields.append(_resize_back(basic.flatfield, H, W))
+            darkfields.append(_resize_back(basic.darkfield, H, W))
+            logger.info(f"End processing channel {c}")
 
     # If input is a folder
     else:
+        import aicsimageio
+
         images_data = None
         channels = None
         num_images = 0
@@ -280,15 +301,15 @@ def main(args):
             else:
                 assert channels == image.channel_names
         for channel in range(len(channels)):
-            logger.info(f'Begin processing channel {channel + 1}')
-            logger.info(f'Total image files to load: {num_images}')
+            logger.info(f"Begin processing channel {channel + 1}")
+            logger.info(f"Total image files to load: {num_images}")
             images_data = []
             for image_path in args.input.iterdir():
-                logger.info(f'Opening image {image_path}')
+                logger.info(f"Opening image {image_path}")
                 image = aicsimageio.AICSImage(image_path)
-                logger.info(f'Total image fields to load: {len(image.scenes)}')
+                logger.info(f"Total image fields to load: {len(image.scenes)}")
                 for i, scene in enumerate(image.scenes, 1):
-                    logger.info(f'Loading field {i}')
+                    logger.info(f"Loading field {i}")
                     image.set_scene(scene)
                     images_data.append(image.get_image_data("MTZYX", C=channel))
             images_data = np.array(images_data).reshape(
@@ -299,28 +320,28 @@ def main(args):
                     "The image is single sited. Was it saved in the correct way?"
                 )
             if not args.no_autotune:
-                logger.info('Autotuning parameters')
+                logger.info("Autotuning parameters")
                 basic.autotune(
                     images_data,
                     fourier_l0_norm_cost_coef=args.autotune_fourier_l0_norm_cost_coef,
                 )
-            logger.info('Generating illumination correction profiles')
+            logger.info("Generating illumination correction profiles")
             basic.fit(images_data)
             flatfields.append(basic.flatfield)
             darkfields.append(basic.darkfield)
-            logger.info(f'End processing channel {channel}')
+            logger.info(f"End processing channel {channel}")
 
     flatfields = np.array(flatfields)
     darkfields = np.array(darkfields)
 
     # Get output file names, splitext gets the file name without the extension
-    flatfield_path = args.output_folder / f'{args.output_flatfield}-ffp.ome.tif'
-    darkfield_path = args.output_folder / f'{args.output_darkfield}-dfp.ome.tif'
+    flatfield_path = args.output_folder / f"{args.output_flatfield}-ffp.ome.tif"
+    darkfield_path = args.output_folder / f"{args.output_darkfield}-dfp.ome.tif"
 
     # Save flatfields and darkfields
     tf_kwargs = dict(
-        photometric='minisblack',
-        compression='adobe_deflate',
+        photometric="minisblack",
+        compression="adobe_deflate",
         predictor=False,
         ome=True,
     )

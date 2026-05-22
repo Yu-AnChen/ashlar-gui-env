@@ -162,6 +162,7 @@ LSP_PATTERN = re.compile(r"LSP\d+")
 def _extract_sample_id(folder_name):
     """Return text before '@' in folder_name if it contains LSP\\d+, else None."""
     candidate = folder_name.split("@")[0]
+    candidate = candidate.split("_")[0]
     return candidate if LSP_PATTERN.search(candidate) else None
 
 

@@ -84,9 +84,11 @@ def _find_cycle_files(slide_dir, file_type=None):
         elif resolved.is_file():
             shortcut_files.append(resolved)
 
-    for ftype in ([file_type] if file_type else ("rcpnl", "xdce")):
+    for ftype in [file_type] if file_type else ("rcpnl", "xdce"):
         real = [*slide_dir.glob(f"*.{ftype}"), *slide_dir.glob(f"*/*.{ftype}")]
-        from_shortcut_files = [f for f in shortcut_files if str(f).lower().endswith(f".{ftype}")]
+        from_shortcut_files = [
+            f for f in shortcut_files if str(f).lower().endswith(f".{ftype}")
+        ]
         from_shortcut_dirs = [f for d in shortcut_dirs for f in d.glob(f"*.{ftype}")]
         files = sorted(
             {*real, *from_shortcut_files, *from_shortcut_dirs},
@@ -137,11 +139,13 @@ def _find_cycle_order_mismatches(slides):
         except Exception:
             continue
         if [p.name for p in by_mtime] != [p.name for p in files]:
-            mismatches.append({
-                "sample": slide["sample"],
-                "specified": [p.name for p in files],
-                "by_mtime": [p.name for p in by_mtime],
-            })
+            mismatches.append(
+                {
+                    "sample": slide["sample"],
+                    "specified": [p.name for p in files],
+                    "by_mtime": [p.name for p in by_mtime],
+                }
+            )
     return mismatches
 
 
@@ -178,29 +182,29 @@ def make_samplesheet(batch_dir, output_dir, file_type="rcpnl"):
     file_type controls which suffix is searched (default: 'rcpnl'; also supports
     'pysed.ome.tif'). Returns (out_path, samples, skipped):
         out_path — Path to the written CSV
-        samples  — dict mapping sample_id → [Path, ...] sorted by scan folder name
+        samples  — dict mapping sample_id → [Path, ...] sorted by filename
         skipped  — list of Paths with no recognized LSP sample ID
     """
     batch_dir = Path(batch_dir)
-    cycle_files = sorted(batch_dir.rglob(f"*.{file_type}"), key=lambda p: p.parent.name)
+    cycle_files = sorted(batch_dir.rglob(f"*.{file_type}"), key=lambda p: p.name)
 
     samples: dict = {}
     skipped: list = []
     for f in cycle_files:
-        sample_id = _extract_sample_id(f.parent.name)
+        sample_id = _extract_sample_id(f.name)
         if sample_id is None:
             skipped.append(f)
             continue
         samples.setdefault(sample_id, []).append(f)
 
     for sample_id in samples:
-        samples[sample_id].sort(key=lambda p: p.parent.name)
+        samples[sample_id].sort(key=lambda p: p.name)
 
     if not samples:
         raise ValueError(
             f"No .{file_type} files with a recognized LSP sample ID found in {batch_dir}. "
             f"Skipped {len(skipped)} file(s). "
-            "Scan folder names must contain LSP followed by at least one digit."
+            "File names must contain LSP followed by at least one digit."
         )
 
     output_dir = Path(output_dir)
@@ -209,7 +213,9 @@ def make_samplesheet(batch_dir, output_dir, file_type="rcpnl"):
 
     with open(out_path, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["sample", "cycle_number", "filename", "image_tiles", "Correction"])
+        writer.writerow(
+            ["sample", "cycle_number", "filename", "image_tiles", "Correction"]
+        )
         for idx, sample_id in enumerate(sorted(samples)):
             if idx > 0:
                 writer.writerow([])
@@ -244,13 +250,20 @@ def _generate_ffp(cycle_files, illum_dir, file_type, dry_run=False, cancel_event
             logging.info(f"    Generating FFP: {ffp_path.name}")
             if not dry_run:
                 cmd = [
-                    "pixi", "run",
-                    "--manifest-path", str(_BASICPY_MANIFEST),
-                    "python", str(_BASICPY_MAIN),
-                    "-i", _unc(cycle_file),
-                    "-o", _unc(illum_dir),
-                    "--output-flatfield", stem,
-                    "--output-darkfield", stem,
+                    "pixi",
+                    "run",
+                    "--manifest-path",
+                    str(_BASICPY_MANIFEST),
+                    "python",
+                    str(_BASICPY_MAIN),
+                    "-i",
+                    _unc(cycle_file),
+                    "-o",
+                    _unc(illum_dir),
+                    "--output-flatfield",
+                    stem,
+                    "--output-darkfield",
+                    stem,
                 ]
                 proc = subprocess.Popen(cmd, shell=False)
                 while proc.poll() is None:
@@ -378,7 +391,9 @@ def process_slide(
     flip_y = suffixes == {"pysed.ome.tif"}
     display_type = detected_type or next(iter(suffixes), "unknown")
 
-    logging.info(f"[{slide_name}] Found {len(cycle_files)} {display_type} cycle file(s)")
+    logging.info(
+        f"[{slide_name}] Found {len(cycle_files)} {display_type} cycle file(s)"
+    )
 
     # flat-field correction profiles
     ffp_list = None
@@ -392,7 +407,9 @@ def process_slide(
                 f"(got '{detected_type}')"
             )
         else:
-            ffp_list = _generate_ffp(cycle_files, illum_dir, detected_type, dry_run, cancel_event)
+            ffp_list = _generate_ffp(
+                cycle_files, illum_dir, detected_type, dry_run, cancel_event
+            )
 
     # build ashlar command
     # pyramidal OME-TIFF output is automatic when -o ends in .ome.tif
@@ -435,9 +452,7 @@ def process_slide(
             except Exception as e:
                 logging.warning(f"[{slide_name}] Channel name error: {e}")
         else:
-            logging.warning(
-                f"[{slide_name}] Output not found; skipping channel names"
-            )
+            logging.warning(f"[{slide_name}] Output not found; skipping channel names")
 
     logging.info(f"[{slide_name}] Done → {out_tif}")
     return True
@@ -459,9 +474,7 @@ def run_batch(slides, *, max_n_jobs=1, cancel_event=None, **kwargs):
                 break
             key = _slide_key(slide)
             try:
-                results[key] = process_slide(
-                    slide, cancel_event=cancel_event, **kwargs
-                )
+                results[key] = process_slide(slide, cancel_event=cancel_event, **kwargs)
             except Exception as e:
                 logging.error(f"[{key}] Unexpected error: {e}")
                 results[key] = False
@@ -674,6 +687,7 @@ def launch_gui():
 
     root = tk.Tk()
     import tkinter.font as _tkfont
+
     _mono = "Cascadia Code" if "Cascadia Code" in _tkfont.families() else "Courier"
     root.title("run-ashlar")
     root.resizable(True, True)
@@ -768,7 +782,10 @@ def launch_gui():
         helper_ft_frm, text="rcpnl", variable=helper_ft_var, value="rcpnl"
     ).pack(side="left", padx=(0, 6))
     ttk.Radiobutton(
-        helper_ft_frm, text="pysed.ome.tif", variable=helper_ft_var, value="pysed.ome.tif"
+        helper_ft_frm,
+        text="pysed.ome.tif",
+        variable=helper_ft_var,
+        value="pysed.ome.tif",
     ).pack(side="left")
 
     helper_make_btn = ttk.Button(helper_frm, text="Make samplesheet")
@@ -1051,9 +1068,7 @@ def launch_gui():
                     lines.append(f"    samplesheet: {', '.join(m['specified'])}")
                     lines.append(f"    by mtime:    {', '.join(m['by_mtime'])}")
                 lines.append("\nProceed with samplesheet order?")
-                if not messagebox.askyesno(
-                    "Cycle order mismatch", "\n".join(lines)
-                ):
+                if not messagebox.askyesno("Cycle order mismatch", "\n".join(lines)):
                     return
         else:
             with open(csv_p, newline="") as f:
@@ -1092,7 +1107,9 @@ def launch_gui():
                 else:
                     slide_dir = Path(slide["Directory"].strip().strip('"')).resolve()
                     slide_name = slide_dir.name
-                    out_p = Path(output_dir).resolve() if output_dir else slide_dir.parent
+                    out_p = (
+                        Path(output_dir).resolve() if output_dir else slide_dir.parent
+                    )
                 active_log_paths.append(
                     (
                         out_p / f"{slide_name}-ashlar.log",

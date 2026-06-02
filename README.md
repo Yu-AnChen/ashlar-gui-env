@@ -1,8 +1,9 @@
 # run-ashlar
 
 Batch-stitch cyclic microscopy slides with
-[ashlar](https://github.com/labsyspharm/ashlar) from a simple CSV config file.
-Includes a graphical interface for point-and-click operation.
+[ashlar](https://github.com/labsyspharm/ashlar). A single graphical interface
+groups the whole workflow into three tabs — **Stitch**, **Channel names**, and
+**Compress** — and every step is also available headless from the command line.
 
 ## Installation
 
@@ -60,71 +61,95 @@ macOS the first time), or run:
 pixi run gui
 ```
 
-The window that opens contains everything needed to run a batch.
+The window has three tabs and a shared log console at the bottom:
+
+- **Stitch** — generate a samplesheet (collapsible helper) and run the ashlar
+  batch. This is the main tab.
+- **Channel names** — apply marker names to already-stitched OME-TIFFs and copy
+  names to/from OMERO.
+- **Compress** — recompress `.pysed.ome.tif` files.
 
 ---
 
-## GUI walkthrough
+## Stitch tab
 
 ### Input fields
 
-| Field                | Required | Description                                                  |
-| -------------------- | -------- | ------------------------------------------------------------ |
-| **Config CSV**       | Yes      | CSV listing the slides to process (see format below)         |
-| **Markers CSV**      | No       | One channel name per line; written into the output OME-TIFF  |
-| **Output directory** | No       | Where output files go. Defaults to next to each slide folder |
+| Field                  | Required | Description                                                          |
+| ---------------------- | -------- | -------------------------------------------------------------------- |
+| **Config CSV**         | Yes      | Lists the slides to process (directory or mcmicro format, see below) |
+| **Input format**       | Yes      | `Directory` or `mcmicro samplesheet`                                 |
+| **Markers (override)** | No       | A markers file applied to every slide, overriding auto-extraction    |
+| **Output directory**   | depends  | Where output files go (required for mcmicro format)                  |
 
 Paths can be typed directly, pasted with Windows *Copy as path* (surrounding
 quotes are stripped automatically), or picked with the **…** browse button.
 
-### Options row
+### Options
 
-| Option                    | Default | Description                                                                 |
-| ------------------------- | ------- | --------------------------------------------------------------------------- |
-| **From slide / To slide** | 0 / all | Process only a slice of the CSV (0-based, *To* is exclusive)                |
-| **Max jobs**              | 1       | Number of slides processed in parallel                                      |
-| **Max shift µm**          | 30      | Maximum allowed per-tile shift passed to ashlar (`-m`)                      |
-| **Filter σ**              | 1.0     | Gaussian pre-filter sigma in pixels (`--filter-sigma`). Set to 0 to disable |
-| **Dry run**               | off     | Print ashlar commands without executing them                                |
-| **Skip existing**         | off     | Skip any slide whose output OME-TIFF already exists                         |
+| Option                              | Default | Description                                                                 |
+| ----------------------------------- | ------- | --------------------------------------------------------------------------- |
+| **From slide / To slide**           | 0 / all | Process only a slice of the CSV (0-based, *To* is exclusive)                |
+| **Max jobs**                        | 1       | Number of slides processed in parallel                                      |
+| **Max shift µm**                    | 30      | Maximum allowed per-tile shift passed to ashlar (`-m`)                      |
+| **Filter sigma**                    | 1.0     | Gaussian pre-filter sigma in pixels (`--filter-sigma`). Set to 0 to disable |
+| **File type**                       | auto    | Cycle file type for directory format (`auto` = rcpnl then xdce, or pysed)   |
+| **Dry run**                         | off     | Print ashlar commands without executing them                                |
+| **Skip existing**                   | off     | Skip any slide whose output OME-TIFF already exists                         |
+| **Auto-extract pysed channel names** | on      | For `.pysed.ome.tif` input, extract channel names (see below)              |
+
+### Samplesheet helper
+
+The collapsible **Samplesheet helper** scans a batch folder, groups cycle files
+by their `LSP…` sample ID, and writes an mcmicro samplesheet CSV. When the file
+type is `pysed.ome.tif` it also writes a `<sample>-markers.csv` per sample and
+asks you to review them. On success it fills in the Config CSV, switches the
+input format to *mcmicro*, and sets the output directory.
+
+### Channel names during stitching
+
+`.rcpnl`/`.xdce` files carry no channel metadata and ashlar does not write
+channel names, so names come only from `.pysed.ome.tif` inputs (which carry
+them) or from a markers file you supply.
+
+For `.pysed.ome.tif` input with **Auto-extract pysed channel names** on:
+
+1. Before ashlar runs, names are extracted from the cycle files (in cycle order)
+   and written to `<slide>-markers.csv` next to the output.
+2. ashlar runs — this is your window to **review and edit** that CSV.
+3. When stitching finishes, the CSV is re-read from disk and its names are
+   written into the output OME-TIFF, so any edits you made take effect.
+
+A **Markers (override)** file, when given, takes precedence and is applied to
+every slide as-is.
 
 ### Running a batch
 
-1. Fill in the **Config CSV** (and optionally **Markers CSV**).
+1. Fill in the **Config CSV** and pick the input format.
 2. Adjust options if needed.
-3. Click **Run ashlar**. The progress bar starts and the console below streams
-   live output.
-4. To stop early, click **Cancel**. Any slide currently running will finish its
-   current step and then stop; slides not yet started are skipped.
+3. Click **Run ashlar**. The progress bar starts and the console streams output.
+4. To stop early, click **Cancel** — a running slide finishes its current step;
+   slides not yet started are skipped.
 
 ### Console and log viewer
 
-The scrolling console shows timestamped log lines for the whole batch. Click
-**Clear console** to reset it without affecting any running jobs.
-
-Click **View logs** to open the log viewer window. It contains:
-
-- A **Summary** tab listing the status of every slide (*waiting*, *running*,
-  *done*, *failed*).
-- A **per-slide tab** for each slide that has started, showing the full ashlar
-  output streamed in real time.
-
-A plain-text log file (`<slide-name>-ashlar.log`) is also written next to each
-output OME-TIFF for permanent reference. It records the ashlar version, the
-exact command used, and all output.
+The shared console shows timestamped log lines. **Clear console** resets it.
+**View logs** opens a viewer with a **Summary** tab (per-slide *waiting /
+running / done / failed*) and a live per-slide ashlar output tab. A plain-text
+`<slide-name>-ashlar.log` is also written next to each output.
 
 ---
 
 ## Config CSV format
 
-The CSV must have a header row. Two columns are used:
+Two formats are supported; pick one with the **Input format** selector.
+
+### Directory format
 
 | Column       | Required | Description                                                           |
 | ------------ | -------- | --------------------------------------------------------------------- |
 | `Directory`  | Yes      | Path to the slide folder                                              |
 | `Correction` | No       | Set to `1`, `yes`, or `true` to run flat-field correction via basicpy |
-
-Example:
 
 ```csv
 Directory,Correction
@@ -133,60 +158,91 @@ D:\data\slide_002,1
 "C:\Users\Me\Documents\slide 003",
 ```
 
-**Tips:**
+Extra columns and blank lines are ignored. Windows *Copy as path* quotes are
+stripped automatically.
 
-- Windows *Copy as path* wraps paths in quotes — that is accepted and stripped
-  automatically.
-- Extra columns are ignored.
-- Blank lines are ignored.
+#### Windows shortcut support
 
-### Windows shortcut support
+If cycle files (`.rcpnl`, `.xdce`, or `.pysed.ome.tif`) are not stored directly
+inside the slide folder, Windows `.lnk` shortcuts are resolved transparently —
+both shortcuts pointing at a cycle file and shortcuts pointing at a directory of
+cycle files. One level of real subdirectories is searched as well.
 
-If cycle files (`.rcpnl` or `.xdce`) are not stored directly inside the slide
-folder, Windows `.lnk` shortcuts are resolved transparently. Both of the
-following arrangements work:
+### mcmicro samplesheet format
 
-- A shortcut pointing directly to a cycle file, e.g. `cycle1.rcpnl -
-  Shortcut.lnk`
-- A shortcut pointing to a **directory** that contains cycle files
-
-The script searches one level of real subdirectories as well, so cycle files
-nested one folder deep are found without shortcuts.
+Columns: `sample`, `cycle_number`, `image_tiles`, `Correction`. Rows are grouped
+by `sample` and ordered by `cycle_number`. The Samplesheet helper generates this
+format for you. An output directory is required.
 
 ---
 
-## Markers CSV format
+## Markers file format
 
-A plain text file with **one channel name per line**, no header:
+The canonical file written by run-ashlar is a 3-column CSV:
 
-```txt
-DAPI
-CD45
-CD3
-panCK
-CD68
+```csv
+channel_number,cycle_number,marker_name
+1,1,DAPI
+2,1,CD45
+3,2,CD3
 ```
 
-- Leading and trailing blank lines are ignored.
-- The number of names must exactly match the number of channels in the output
-  OME-TIFF.
-- When provided, channel names are embedded in the OME-XML metadata of the
-  output file after stitching completes.
+When **reading** a markers file (override field, or the Channel names tab), the
+format is detected automatically — these are all accepted:
+
+- the 3-column CSV above (rows ordered by `channel_number`),
+- a bare one-name-per-line list,
+- an OMERO-style comma-separated line (`DAPI, CD45, CD3`).
+
+The number of names must match the channel count in the target OME-TIFF.
+
+---
+
+## Channel names tab
+
+For applying marker names to OME-TIFFs that are already stitched — to fix names,
+or to add them after the fact.
+
+- **OME-TIFF dir / file** + empty **Markers** → each `<sample>.ome.tif` is paired
+  with its `<sample>-markers.csv` in the same folder.
+- **OME-TIFF dir / file** + a **Markers** file → that one file is applied to all
+  targets.
+- **OMERO names** box — load names from a markers file or OME-TIFF into an
+  OMERO-style string and copy it to the clipboard, or paste a string copied out
+  of OMERO and apply it to a file. Useful when names were added in OMERO after
+  upload and need to be written back into the file.
+
+---
+
+## Compress tab
+
+Recompresses `.pysed.ome.tif` files (zlib + predictor, with IFDs clustered for
+fast Bio-Formats access). The output keeps the same structure and OME-XML, so it
+remains a drop-in ashlar input.
+
+- **Input folder** is searched recursively for `.pysed.ome.tif`.
+- **Output directory** receives the compressed copies, mirroring the input's
+  subfolder structure (originals are kept).
+- **Compress in place** overwrites the originals instead.
+
+Files that are already compressed are hardlinked (or copied) rather than
+recompressed.
 
 ---
 
 ## Output
 
-For each slide, the script writes two files next to the slide folder (or in the
+For each slide the Stitch tab writes, next to the slide folder (or in the
 configured output directory):
 
-| File                      | Description                                |
-| ------------------------- | ------------------------------------------ |
-| `<slide-name>.ome.tif`    | Pyramidal OME-TIFF produced by ashlar      |
-| `<slide-name>-ashlar.log` | Full ashlar log (version, command, output) |
+| File                       | Description                                          |
+| -------------------------- | ---------------------------------------------------- |
+| `<slide-name>.ome.tif`     | Pyramidal OME-TIFF produced by ashlar                |
+| `<slide-name>-ashlar.log`  | Full ashlar log (version, command, output)           |
+| `<slide-name>-markers.csv` | Extracted channel names (pysed input only; editable) |
 
 When flat-field correction is enabled, illumination profiles are written to an
-`illumination_profiles/` folder next to the slide folder:
+`illumination_profiles/` folder:
 
 | File                       | Description        |
 | -------------------------- | ------------------ |
@@ -195,46 +251,26 @@ When flat-field correction is enabled, illumination profiles are written to an
 
 ---
 
-## add-channel-name.py — batch-add channel names to existing OME-TIFFs
-
-`add-channel-name.py` is a small standalone GUI for embedding channel names into
-OME-TIFF files that have already been stitched. It is useful when channel names
-were not available at stitching time, or when names need to be corrected.
-
-Launch it with:
-
-```sh
-pixi run python add-channel-name.py
-```
-
-### Inputs
-
-| Field                  | Description                                                 |
-| ---------------------- | ----------------------------------------------------------- |
-| **OME-TIFF directory** | Folder containing `.ome.tif` files to update                |
-| **Markers CSV**        | Same format as above — one channel name per line, no header |
-
-Windows `.lnk` shortcuts pointing to `.ome.tif` files inside the directory are
-resolved automatically.
-
-### Behaviour
-
-- All `.ome.tif` files found in the directory are processed in order.
-- The number of names in the markers CSV must exactly match the channel count in
-  every file; a mismatch stops that file with an error and moves on to the next.
-- Channel names are written in-place into the OME-XML metadata of each file.
-- Progress is shown in the log panel; a summary line reports how many files were
-  updated successfully.
-
----
-
 ## Command-line mode
 
-The GUI is the recommended interface. For scripted or headless use, pass a CSV
-file directly:
+The GUI is the recommended interface. Every step is also a subcommand of
+`run-ashlar.py` for scripted or headless use:
 
 ```sh
-pixi run python run-ashlar.py slides.csv --markers markers.csv --max-n-jobs 4
+# stitch a batch
+pixi run python run-ashlar.py stitch slides.csv --markers markers.csv --max-n-jobs 4
+
+# generate an mcmicro samplesheet
+pixi run python run-ashlar.py samplesheet /path/to/batch --output-dir /path/to/out
+
+# apply channel names (auto-pair <sample>-markers.csv, or pass --markers)
+pixi run python run-ashlar.py channels apply --tiff-dir /path/to/out
+pixi run python run-ashlar.py channels extract cycle1.pysed.ome.tif cycle2.pysed.ome.tif -o markers.csv
+pixi run python run-ashlar.py channels omero markers.csv
+
+# compress pysed files
+pixi run python run-ashlar.py compress /path/to/batch --output-dir /path/to/compressed
 ```
 
-Run `pixi run python run-ashlar.py --help` for all options.
+Run `pixi run python run-ashlar.py --help` (or `<subcommand> --help`) for all
+options. With no subcommand, or `--gui`, the GUI launches.

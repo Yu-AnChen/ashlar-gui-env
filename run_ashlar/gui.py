@@ -550,9 +550,9 @@ class App:
 
         ttk.Label(
             tab,
-            text="Apply markers to OME-TIFFs. Leave the markers field empty to auto-pair\n"
+            text="Apply markers to OME-TIFFs. Leave the markers field empty to auto-pair "
             "each  <sample>.ome.tif  with its  <sample>-markers.csv  in the directory.",
-            justify="left",
+            justify="left", wraplength=620,
         ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 6))
 
         self._dir_row(tab, 1, "OME-TIFF dir / file", self.ch_dir_var)
@@ -565,9 +565,9 @@ class App:
 
         ttk.Label(
             tab,
-            text="OMERO names — paste a comma-separated list copied from OMERO, or load names\n"
-            "from a file to copy into OMERO.",
-            justify="left",
+            text="OMERO names — paste a comma-separated list copied from OMERO, or load "
+            "names from a file to copy into OMERO.",
+            justify="left", wraplength=620,
         ).grid(row=5, column=0, columnspan=3, sticky="w")
 
         from tkinter import scrolledtext
@@ -576,10 +576,11 @@ class App:
         self.omero_box.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(2, 4))
 
         obar = ttk.Frame(tab)
-        obar.grid(row=7, column=0, columnspan=3, sticky="w")
+        obar.grid(row=7, column=0, columnspan=3)
         ttk.Button(obar, text="Load names from file…", command=self._on_omero_load).pack(side="left", padx=(0, 8))
         ttk.Button(obar, text="Copy to clipboard", command=self._on_omero_copy).pack(side="left", padx=(0, 8))
-        ttk.Button(obar, text="Apply names to file…", command=self._on_omero_apply).pack(side="left")
+        ttk.Button(obar, text="Apply names to file…", command=self._on_omero_apply_file).pack(side="left", padx=(0, 8))
+        ttk.Button(obar, text="Apply names to folder…", command=self._on_omero_apply_dir).pack(side="left")
 
     def _channel_targets(self):
         """Return list of OME-TIFF Paths from the dir/file entry, or None on error."""
@@ -663,24 +664,52 @@ class App:
         self.root.clipboard_append(text)
         logging.info("Copied channel names to clipboard.")
 
-    def _on_omero_apply(self):
+    def _on_omero_apply_file(self):
+        from tkinter import filedialog
+
+        names = self._omero_names_or_warn()
+        if names is None:
+            return
+        path = filedialog.askopenfilename(filetypes=[("OME-TIFF", "*.ome.tif *.tif *.tiff"), ("All", "*.*")])
+        if path:
+            self._omero_apply(names, [Path(path)])
+
+    def _on_omero_apply_dir(self):
         from tkinter import filedialog, messagebox
+
+        names = self._omero_names_or_warn()
+        if names is None:
+            return
+        d = filedialog.askdirectory()
+        if not d:
+            return
+        tiffs = sorted(Path(d).glob("*.ome.tif"))
+        if not tiffs:
+            messagebox.showwarning("No files", f"No .ome.tif files in:\n{d}")
+            return
+        self._omero_apply(names, tiffs)
+
+    def _omero_names_or_warn(self):
+        from tkinter import messagebox
 
         names = core.parse_marker_text(self.omero_box.get("1.0", "end"))
         if not names:
             messagebox.showerror("Empty", "The OMERO names box is empty.")
-            return
-        path = filedialog.askopenfilename(filetypes=[("OME-TIFF", "*.ome.tif *.tif *.tiff"), ("All", "*.*")])
-        if not path:
-            return
+            return None
+        return names
 
+    def _omero_apply(self, names, tiffs):
         def worker():
-            logging.info(f"{Path(path).name}: applying {len(names)} channel name(s) from OMERO box")
-            try:
-                core.add_channel_names(path, names)
-                logging.info("  done")
-            except Exception as e:
-                logging.error(f"  failed: {e}")
+            n_ok = 0
+            for tif in tiffs:
+                logging.info(f"{tif.name}: applying {len(names)} channel name(s) from OMERO box")
+                try:
+                    core.add_channel_names(str(tif), names)
+                    logging.info("  done")
+                    n_ok += 1
+                except Exception as e:
+                    logging.error(f"  failed: {e}")
+            logging.info(f"Finished: {n_ok}/{len(tiffs)} file(s) updated")
 
         self._run_thread(worker)
 
@@ -699,10 +728,10 @@ class App:
 
         ttk.Label(
             tab,
-            text="Compress .pysed.ome.tif files (recursively under the input folder).\n"
-            "Output mirrors the input's subfolder structure; originals are kept unless\n"
+            text="Compress .pysed.ome.tif files (recursively under the input folder). "
+            "Output mirrors the input's subfolder structure; originals are kept unless "
             "'Compress in place' is checked.",
-            justify="left",
+            justify="left", wraplength=620,
         ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 6))
 
         self._dir_row(tab, 1, "Input folder *", self.cz_input_var)

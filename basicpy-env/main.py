@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import argparse
 import logging
-import os
 from argparse import ArgumentParser as AP
 from os.path import splitext
 from pathlib import Path
@@ -27,6 +26,30 @@ logging.basicConfig(
 )
 logger = logging.getLogger("basicpy-docker-mcmicro")
 logger.setLevel(logging.INFO)
+
+# Path to the vendored Bio-Formats uber-jar, fetched next to this script by
+# populate_scyjava_cache.py (`pixi run setup-basicpy` locally; a build step in the
+# container). Resolves to ./jars locally and /opt/jars in the image.
+BIOFORMATS_JAR = Path(__file__).resolve().parent / "jars" / "bioformats_package.jar"
+
+
+def ensure_bioformats():
+    """Put the vendored Bio-Formats uber-jar on the JVM classpath and start the
+    JVM, before any bioio_bioformats.Reader is constructed. Once the JVM is
+    running, bioio_bioformats' own scyjava/jgo/maven resolution becomes a no-op,
+    sidestepping its fragile transitive-dependency download (which otherwise
+    fails at runtime with NoClassDefFoundError).
+    """
+    if scyjava.jvm_started():
+        return
+    if not BIOFORMATS_JAR.exists():
+        raise RuntimeError(
+            f"Bio-Formats jar not found at {BIOFORMATS_JAR}.\n"
+            "Fetch it first with `pixi run setup-basicpy` (or run "
+            "populate_scyjava_cache.py)."
+        )
+    scyjava.config.add_classpath(str(BIOFORMATS_JAR))
+    scyjava.start_jvm()
 
 
 def get_args():
@@ -215,6 +238,10 @@ def _resize_back(img, height, width):
 
 def main(args):
 
+    # Put the vendored Bio-Formats uber-jar on the classpath before any Reader
+    # is constructed (sidesteps bioio_bioformats' fragile jgo/maven download).
+    ensure_bioformats()
+
     # Run BASIC
     basic = BaSiC(
         smoothness_flatfield=args.smoothness_flatfield,
@@ -229,16 +256,6 @@ def main(args):
     # Initialize flatfields and darkfields
     flatfields = []
     darkfields = []
-
-    if "BASICPY_DOCKER_MCMICRO" in os.environ:
-        # If we're running inside our own container, configure scyjava to use
-        # our custom location for maven and jgo to stash their files. (jgo and
-        # maven should already be configured via environment variables)
-        # Otherwise leave the scyjava defaults alone so the script is usable
-        # outside the container as well.
-        container_scyjava_base = Path("/opt/scyjava")
-        scyjava.config.set_cache_dir(container_scyjava_base / ".jgo")
-        scyjava.config.set_m2_repo(container_scyjava_base / ".m2" / "repository")
 
     # dask.config.set(scheduler="synchronous")
 

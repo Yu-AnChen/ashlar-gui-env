@@ -37,16 +37,16 @@ isolated environment.
 
 ### 3 — Install and set up the basicpy environment
 
-Flat-field correction uses a separate pixi environment. Install and warm up its
-BioFormats cache with two commands (also defined as pixi tasks):
+Flat-field correction uses a separate pixi environment. Install it and fetch its
+Bio-Formats jar with two commands (also defined as pixi tasks):
 
 ```sh
 pixi run install-basicpy
 pixi run setup-basicpy
 ```
 
-`setup-basicpy` downloads BioFormats JARs on first run — this takes a minute or
-two and only needs to happen once.
+`setup-basicpy` downloads the Bio-Formats jar (~54 MB) into `basicpy-env/jars/` on
+first run; it's version-pinned and only needs to happen once.
 
 ---
 

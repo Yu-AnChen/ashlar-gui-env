@@ -625,43 +625,49 @@ def process_slide(
     return True
 
 
-def run_batch(slides, *, max_n_jobs=1, cancel_event=None, **kwargs):
+def run_batch(slides, *, max_n_jobs=1, cancel_event=None, on_status=None, **kwargs):
     """Run process_slide for each slide, in parallel when max_n_jobs > 1.
 
     Ashlar output is always written to per-slide log files. It is also piped to
     the console when running a single job; suppressed in parallel mode to avoid
     interleaved output from concurrent slides.
+
+    on_status, if given, is called as on_status(slide_key, status) where status
+    is 'running' when a slide starts and 'done'/'failed'/'cancelled' when it
+    finishes. It may be called from worker threads, so the callback must be
+    thread-safe and must not touch GUI widgets directly.
     """
     kwargs.setdefault("pipe_ashlar_to_console", max_n_jobs == 1)
+
+    def _run_one(slide):
+        key = _slide_key(slide)
+        if on_status:
+            on_status(key, "running")
+        try:
+            ok = process_slide(slide, cancel_event=cancel_event, **kwargs)
+        except Exception as e:
+            logging.error(f"[{key}] Unexpected error: {e}")
+            ok = False
+        if on_status:
+            cancelled = bool(cancel_event and cancel_event.is_set())
+            on_status(key, "done" if ok else ("cancelled" if cancelled else "failed"))
+        return key, ok
+
     results = {}
     if max_n_jobs == 1:
         for slide in slides:
             if cancel_event and cancel_event.is_set():
                 logging.info("Batch cancelled")
                 break
-            key = _slide_key(slide)
-            try:
-                results[key] = process_slide(slide, cancel_event=cancel_event, **kwargs)
-            except Exception as e:
-                logging.error(f"[{key}] Unexpected error: {e}")
-                results[key] = False
+            key, ok = _run_one(slide)
+            results[key] = ok
     else:
         with ThreadPoolExecutor(max_workers=max_n_jobs) as pool:
-            futures = {
-                pool.submit(
-                    process_slide, slide, cancel_event=cancel_event, **kwargs
-                ): slide
-                for slide in slides
-            }
+            futures = {pool.submit(_run_one, slide): slide for slide in slides}
             try:
                 for fut in as_completed(futures):
-                    slide = futures[fut]
-                    key = _slide_key(slide)
-                    try:
-                        results[key] = fut.result()
-                    except Exception as e:
-                        logging.error(f"[{key}] Unexpected error: {e}")
-                        results[key] = False
+                    key, ok = fut.result()
+                    results[key] = ok
                     if cancel_event and cancel_event.is_set():
                         for f in futures:
                             f.cancel()

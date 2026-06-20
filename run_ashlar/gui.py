@@ -297,7 +297,8 @@ class App:
 
         # stitch run state
         self.stitch_cancel = threading.Event()
-        self.active_log_paths = []      # (log_path, out_tif) per slide
+        self.active_log_paths = []      # (slide_key, log_path) per slide
+        self.slide_status = {}          # slide_key -> running/done/failed/cancelled
         self.batch_done = [True]
         self.batch_start_time = [0.0]
 
@@ -432,6 +433,7 @@ class App:
 
         # precompute log + output paths so the viewer can open immediately
         self.active_log_paths.clear()
+        self.slide_status.clear()
         try:
             for slide in subset:
                 if "cycle_files" in slide:
@@ -442,7 +444,7 @@ class App:
                     slide_name = slide_dir.name
                     out_p = Path(output_dir).resolve() if output_dir else slide_dir.parent
                 self.active_log_paths.append(
-                    (out_p / f"{slide_name}-ashlar.log", out_p / f"{slide_name}.ome.tif")
+                    (core._slide_key(slide), out_p / f"{slide_name}-ashlar.log")
                 )
         except Exception as e:
             messagebox.showerror("Error", f"{type(e).__name__}: {e}")
@@ -464,6 +466,7 @@ class App:
                     subset,
                     max_n_jobs=max_jobs,
                     cancel_event=self.stitch_cancel,
+                    on_status=self._set_slide_status,
                     markers_names=markers_names,
                     extract_pysed_markers=self.auto_names_var.get(),
                     dry_run=self.dry_var.get(),
@@ -490,6 +493,11 @@ class App:
         self.btn_cancel.configure(state="disabled")
         logging.info("Cancelling — waiting for running slides to finish…")
 
+    def _set_slide_status(self, key, status):
+        # called from run_batch worker thread(s); a single dict write is atomic
+        # enough under the GIL, and the viewer only reads via .get()
+        self.slide_status[key] = status
+
     def _open_log_viewer(self):
         tk, ttk = self.tk, self.ttk
         from tkinter import messagebox, scrolledtext
@@ -515,7 +523,7 @@ class App:
         sum_txt.grid(sticky="nsew")
         notebook.add(sum_frame, text="Summary")
 
-        positions = {log: 0 for log, _ in self.active_log_paths}
+        positions = {log: 0 for _, log in self.active_log_paths}
         slide_tabs = {}
 
         def add_slide_tab(log_path):
@@ -532,18 +540,12 @@ class App:
 
         def update_summary():
             lines = ["  {:<10}  {}".format("status", "slide"), "  " + "─" * 46]
-            for log_path, out_tif in self.active_log_paths:
+            for key, log_path in self.active_log_paths:
                 slide_name = log_path.name.replace("-ashlar.log", "")
-                log_current = log_path.exists() and log_path.stat().st_mtime >= self.batch_start_time[0]
-                out_current = out_tif.exists() and out_tif.stat().st_mtime >= self.batch_start_time[0]
-                if out_current:
-                    status = "done"  # produced this run
-                elif log_current:
-                    status = "failed" if self.batch_done[0] else "running"
-                elif self.batch_done[0]:
-                    status = "done" if out_tif.exists() else "---"  # skipped / pre-existing
-                else:
-                    status = "waiting"
+                # status comes from the batch itself, not from output timestamps
+                status = self.slide_status.get(key)
+                if status is None:
+                    status = "waiting" if not self.batch_done[0] else "---"
                 lines.append(f"  {status:<10}  {slide_name}")
             sum_txt.configure(state="normal")
             sum_txt.delete("1.0", "end")
@@ -552,7 +554,7 @@ class App:
 
         def poll_files():
             update_summary()
-            for log_path, _ in self.active_log_paths:
+            for _, log_path in self.active_log_paths:
                 if log_path.exists() and log_path.stat().st_mtime >= self.batch_start_time[0]:
                     if log_path not in slide_tabs:
                         add_slide_tab(log_path)

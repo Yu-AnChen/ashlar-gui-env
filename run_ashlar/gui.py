@@ -145,6 +145,23 @@ class App:
         if value:
             var.set(value)
 
+    @staticmethod
+    def _is_num_prefix(text, allow_dot):
+        """True if text is empty or a valid (in-progress) non-negative number.
+
+        Used as a key-validation predicate. Empty is allowed so a field can be
+        cleared mid-edit, and a lone '.' / trailing '.' is allowed so floats can
+        be typed; the .get() backstop in the run handler catches those.
+        """
+        if text == "":
+            return True
+        if allow_dot:
+            if text.count(".") > 1:
+                return False
+            text = text.replace(".", "", 1)
+            return text == "" or text.isdigit()
+        return text.isdigit()
+
     def _run_thread(self, target):
         threading.Thread(target=target, daemon=True).start()
 
@@ -228,21 +245,29 @@ class App:
 
         opts = ttk.Frame(tab)
         opts.grid(row=7, column=0, columnspan=3, sticky="w", pady=6)
+        # key-level validation: block non-numeric typing before it can reach .get()
+        vint = (self.root.register(lambda p: self._is_num_prefix(p, False)), "%P")
+        vfloat = (self.root.register(lambda p: self._is_num_prefix(p, True)), "%P")
         ttk.Label(opts, text="From slide").pack(side="left", padx=(0, 2))
-        ttk.Spinbox(opts, textvariable=self.from_var, from_=0, to=9999, width=5).pack(
-            side="left", padx=(0, 6)
-        )
+        ttk.Spinbox(
+            opts, textvariable=self.from_var, from_=0, to=9999, width=5,
+            validate="key", validatecommand=vint,
+        ).pack(side="left", padx=(0, 6))
         ttk.Label(opts, text="To slide").pack(side="left", padx=(0, 2))
-        ttk.Entry(opts, textvariable=self.to_var, width=5).pack(side="left", padx=(0, 16))
-        for label, var, lo, hi, inc, w in [
-            ("Max jobs", self.jobs_var, 1, 64, 1, 4),
-            ("Max shift µm", self.margin_var, 0, 500, 5, 5),
-            ("Filter sigma", self.sigma_var, 0, 10, 0.5, 4),
+        ttk.Entry(
+            opts, textvariable=self.to_var, width=5,
+            validate="key", validatecommand=vint,
+        ).pack(side="left", padx=(0, 16))
+        for label, var, lo, hi, inc, w, vcmd in [
+            ("Max jobs", self.jobs_var, 1, 64, 1, 4, vint),
+            ("Max shift µm", self.margin_var, 0, 500, 5, 5, vint),
+            ("Filter sigma", self.sigma_var, 0, 10, 0.5, 4, vfloat),
         ]:
             ttk.Label(opts, text=label).pack(side="left", padx=(0, 2))
-            ttk.Spinbox(opts, textvariable=var, from_=lo, to=hi, increment=inc, width=w).pack(
-                side="left", padx=(0, 10)
-            )
+            ttk.Spinbox(
+                opts, textvariable=var, from_=lo, to=hi, increment=inc, width=w,
+                validate="key", validatecommand=vcmd,
+            ).pack(side="left", padx=(0, 10))
         ttk.Label(opts, text="File type").pack(side="left", padx=(16, 2))
         ttk.Combobox(
             opts, textvariable=self.file_type_var, values=["auto", "pysed.ome.tif"],
@@ -374,9 +399,20 @@ class App:
             with open(csv_p, newline="") as f:
                 slides = list(csv.DictReader(f))
 
-        to_raw = self.to_var.get().strip()
-        to_idx = int(to_raw) if to_raw else None
-        subset = slides[self.from_var.get() : to_idx]
+        try:
+            from_idx = self.from_var.get()
+            to_raw = self.to_var.get().strip()
+            to_idx = int(to_raw) if to_raw else None
+            max_jobs = self.jobs_var.get()
+            max_shift = self.margin_var.get()
+            sigma = self.sigma_var.get()  # 0 → ashlar's default (no filtering); handled in core
+        except (ValueError, self.tk.TclError):
+            messagebox.showerror(
+                "Invalid input",
+                "From/To slide, Max jobs, Max shift, and Filter sigma must be numbers.",
+            )
+            return
+        subset = slides[from_idx:to_idx]
 
         markers_names = None
         m_path = self.markers_var.get().strip().strip('"')
@@ -393,7 +429,6 @@ class App:
                 "Missing", "Output directory is required when using mcmicro samplesheet format."
             )
             return
-        sigma = self.sigma_var.get() or None  # 0 means no filtering
 
         # precompute log + output paths so the viewer can open immediately
         self.active_log_paths.clear()
@@ -427,13 +462,13 @@ class App:
             try:
                 core.run_batch(
                     subset,
-                    max_n_jobs=self.jobs_var.get(),
+                    max_n_jobs=max_jobs,
                     cancel_event=self.stitch_cancel,
                     markers_names=markers_names,
                     extract_pysed_markers=self.auto_names_var.get(),
                     dry_run=self.dry_var.get(),
                     skip_existing=self.skip_var.get(),
-                    maximum_shift=self.margin_var.get(),
+                    maximum_shift=max_shift,
                     filter_sigma=sigma,
                     output_dir=output_dir,
                     file_type=None if ft == "auto" else ft,
@@ -500,12 +535,15 @@ class App:
             for log_path, out_tif in self.active_log_paths:
                 slide_name = log_path.name.replace("-ashlar.log", "")
                 log_current = log_path.exists() and log_path.stat().st_mtime >= self.batch_start_time[0]
-                if out_tif.exists():
-                    status = "done"
+                out_current = out_tif.exists() and out_tif.stat().st_mtime >= self.batch_start_time[0]
+                if out_current:
+                    status = "done"  # produced this run
                 elif log_current:
                     status = "failed" if self.batch_done[0] else "running"
+                elif self.batch_done[0]:
+                    status = "done" if out_tif.exists() else "---"  # skipped / pre-existing
                 else:
-                    status = "waiting" if not self.batch_done[0] else "---"
+                    status = "waiting"
                 lines.append(f"  {status:<10}  {slide_name}")
             sum_txt.configure(state="normal")
             sum_txt.delete("1.0", "end")

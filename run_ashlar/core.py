@@ -88,10 +88,9 @@ def _find_cycle_files(slide_dir, file_type=None):
         from_shortcut_dirs = [f for d in shortcut_dirs for f in d.glob(f"*.{ftype}")]
         files = sorted(
             {*real, *from_shortcut_files, *from_shortcut_dirs},
-            key=lambda p: p.name,
+            key=lambda p: (p.stat().st_mtime, p.name),
         )
         if files:
-            files.sort(key=lambda p: p.stat().st_mtime)
             return files, ftype
     return [], file_type or "rcpnl"
 
@@ -577,7 +576,7 @@ def process_slide(
         "-o",
         str(out_tif),
     ]
-    if filter_sigma is not None:
+    if filter_sigma:  # 0 or None → ashlar's default (no filtering)
         cmd += ["--filter-sigma", str(filter_sigma)]
     if ffp_list:
         cmd += ["--ffp", *ffp_list]
@@ -686,6 +685,7 @@ def run_batch(slides, *, max_n_jobs=1, cancel_event=None, **kwargs):
 
 class _MessageFilter(logging.Filter):
     def __init__(self, *substrings):
+        super().__init__()
         self.substrings = substrings
 
     def filter(self, record):
@@ -706,6 +706,10 @@ def cluster_bigtiff_ifds(path):
 
     Lets Bio-Formats (showinf -nopix) read the IFD chain with a single seek rather
     than seeking through all pixel data.
+
+    Precondition: the file must be freshly written with interleaved IFDs (each IFD
+    immediately precedes its pixel data, as tifffile writes them). Not idempotent —
+    rerunning on an already-clustered file raises ValueError.
     """
     import tifffile
 
@@ -718,6 +722,12 @@ def cluster_bigtiff_ifds(path):
 
     n = len(ifd_offsets)
     ifd_sizes = [data_offsets[i] - ifd_offsets[i] for i in range(n)]
+    if any(s <= 0 for s in ifd_sizes):
+        raise ValueError(
+            "cluster_bigtiff_ifds expects freshly written, interleaved IFDs "
+            "(each IFD precedes its pixel data); got a non-positive IFD size — "
+            "the file may already be clustered"
+        )
 
     # Load all raw IFD bytes into memory (total << 1 MB)
     with path.open("rb") as f:

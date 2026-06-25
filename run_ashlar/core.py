@@ -518,6 +518,8 @@ class OrionOptions:
     output_channels: list | None = None
     stitch_alpha: float = 0.01
     max_error: float | None = None
+    flip_x: bool = False
+    flip_y: bool = False
     # group a — run-wide execution
     n_jobs: int = 5
     temp_dir: str | None = None
@@ -667,14 +669,18 @@ def process_slide(
         cmd += ["--no-mask-background"]
     if orion.only_qc:
         cmd += ["--only-qc"]
+    if orion.flip_x:
+        cmd += ["--flip-x"]
+    if orion.flip_y:
+        cmd += ["--flip-y"]
     if orion.flip_mosaic_x:
         cmd += ["--flip-mosaic-x"]
     if orion.flip_mosaic_y:
         cmd += ["--flip-mosaic-y"]
     if ffp_list:
         cmd += ["--ffp", *ffp_list]
-    if is_pysed:
-        cmd += ["--flip-y"]
+    # NOTE: rcashlar-orion auto-handles y-flipping for pysed inputs, so we no
+    # longer add --flip-y for pysed here; use the explicit flip_x/flip_y knobs.
 
     logging.info(f"[{slide_name}] {shlex.join(cmd)}")
 

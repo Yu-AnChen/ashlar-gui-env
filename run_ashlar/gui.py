@@ -132,13 +132,14 @@ class App:
         from tkinter import filedialog
 
         ttk.Label(frm, text=label).grid(row=row, column=0, sticky="w", pady=2)
-        ttk.Entry(frm, textvariable=var, width=54).grid(
-            row=row, column=1, padx=4, sticky="ew"
-        )
-        ttk.Button(
+        entry = ttk.Entry(frm, textvariable=var, width=54)
+        entry.grid(row=row, column=1, padx=4, sticky="ew")
+        btn = ttk.Button(
             frm, text="…", width=2,
             command=lambda: self._set_if(var, filedialog.askdirectory()),
-        ).grid(row=row, column=2)
+        )
+        btn.grid(row=row, column=2)
+        return entry, btn
 
     @staticmethod
     def _set_if(var, value):
@@ -179,17 +180,14 @@ class App:
         self.fmt_var = tk.StringVar(value="directory")
         self.markers_var = tk.StringVar()
         self.output_dir_var = tk.StringVar()
-        self.from_var = tk.IntVar(value=0)
-        self.to_var = tk.StringVar(value="")
         self.jobs_var = tk.IntVar(value=2)
         self.margin_var = tk.IntVar(value=30)
         self.sigma_var = tk.DoubleVar(value=1.0)
         self.dry_var = tk.BooleanVar(value=False)
         self.skip_var = tk.BooleanVar(value=False)
-        self.auto_names_var = tk.BooleanVar(value=True)
         self.file_type_var = tk.StringVar(value="auto")
 
-        # orion options (collapsible)
+        # debug settings (collapsible)
         self._orion_open = False
         self.njobs_var = tk.IntVar(value=5)
         self.align_channel_var = tk.IntVar(value=0)
@@ -199,6 +197,8 @@ class App:
         self.temp_dir_var = tk.StringVar()
         self.no_mask_var = tk.BooleanVar(value=False)
         self.only_qc_var = tk.BooleanVar(value=False)
+        self.flip_x_var = tk.BooleanVar(value=False)
+        self.flip_y_var = tk.BooleanVar(value=False)
         self.flip_mx_var = tk.BooleanVar(value=False)
         self.flip_my_var = tk.BooleanVar(value=False)
 
@@ -255,32 +255,23 @@ class App:
 
         self._file_row(tab, 5, "Markers (override)", self.markers_var, [("CSV", "*.csv"), ("All", "*.*")])
         self._dir_row(tab, 6, "Output directory", self.output_dir_var)
+        self._dir_row(tab, 7, "Temp dir", self.temp_dir_var)
 
-        opts = ttk.Frame(tab)
-        opts.grid(row=7, column=0, columnspan=3, sticky="w", pady=6)
         # key-level validation: block non-numeric typing before it can reach .get()
         vint = (self.root.register(lambda p: self._is_num_prefix(p, False)), "%P")
         vfloat = (self.root.register(lambda p: self._is_num_prefix(p, True)), "%P")
-        ttk.Label(opts, text="From slide").pack(side="left", padx=(0, 2))
-        ttk.Spinbox(
-            opts, textvariable=self.from_var, from_=0, to=9999, width=5,
-            validate="key", validatecommand=vint,
-        ).pack(side="left", padx=(0, 6))
-        ttk.Label(opts, text="To slide").pack(side="left", padx=(0, 2))
-        ttk.Entry(
-            opts, textvariable=self.to_var, width=5,
-            validate="key", validatecommand=vint,
-        ).pack(side="left", padx=(0, 16))
-        for label, var, lo, hi, inc, w, vcmd in [
-            ("Max jobs", self.jobs_var, 1, 4, 1, 4, vint),
-            ("Max shift µm", self.margin_var, 0, 500, 5, 5, vint),
-            ("Filter sigma", self.sigma_var, 0, 10, 0.5, 4, vfloat),
+
+        opts = ttk.Frame(tab)
+        opts.grid(row=8, column=0, columnspan=3, sticky="w", pady=6)
+        for label, var, hi in [
+            ("Parallel slides", self.jobs_var, 4),   # hard-capped at 4 (see clamp_parallelism)
+            ("Assembly jobs", self.njobs_var, 64),
         ]:
             ttk.Label(opts, text=label).pack(side="left", padx=(0, 2))
             ttk.Spinbox(
-                opts, textvariable=var, from_=lo, to=hi, increment=inc, width=w,
-                validate="key", validatecommand=vcmd,
-            ).pack(side="left", padx=(0, 10))
+                opts, textvariable=var, from_=1, to=hi, width=4,
+                validate="key", validatecommand=vint,
+            ).pack(side="left", padx=(0, 12))
         ttk.Label(opts, text="File type").pack(side="left", padx=(16, 2))
         ttk.Combobox(
             opts, textvariable=self.file_type_var, values=["auto", "pysed.ome.tif"],
@@ -288,31 +279,33 @@ class App:
         ).pack(side="left", padx=(0, 10))
 
         opts2 = ttk.Frame(tab)
-        opts2.grid(row=8, column=0, columnspan=3, sticky="w")
-        ttk.Checkbutton(opts2, text="Dry run", variable=self.dry_var).pack(side="left", padx=(0, 6))
-        ttk.Checkbutton(opts2, text="Skip existing", variable=self.skip_var).pack(side="left", padx=(0, 6))
-        ttk.Checkbutton(
-            opts2, text="Auto-extract pysed channel names", variable=self.auto_names_var
-        ).pack(side="left")
+        opts2.grid(row=9, column=0, columnspan=3, sticky="w")
+        for text, var in [
+            ("Dry run", self.dry_var),
+            ("Skip existing", self.skip_var),
+            ("No mask background", self.no_mask_var),
+            ("Only QC", self.only_qc_var),
+        ]:
+            ttk.Checkbutton(opts2, text=text, variable=var).pack(side="left", padx=(0, 8))
 
-        # ── collapsible Orion options ────────────────────────────────────────────
+        # ── collapsible Debug settings ───────────────────────────────────────────
         self.orion_toggle_btn = ttk.Button(
-            tab, text="▶ Orion options", command=self._toggle_orion
+            tab, text="▶ Debug settings", command=self._toggle_orion
         )
-        self.orion_toggle_btn.grid(row=9, column=0, columnspan=3, sticky="w", pady=(6, 2))
+        self.orion_toggle_btn.grid(row=10, column=0, columnspan=3, sticky="w", pady=(6, 2))
 
         self.orion_frm = ttk.LabelFrame(tab, padding=4)
         self.orion_frm.columnconfigure(1, weight=1)
-        self.orion_frm.grid(row=10, column=0, columnspan=3, sticky="ew")
+        self.orion_frm.grid(row=11, column=0, columnspan=3, sticky="ew")
         self.orion_frm.grid_remove()
         self._build_orion_options(self.orion_frm, vint, vfloat)
 
         self.stitch_prog = ttk.Progressbar(tab, mode="indeterminate")
-        self.stitch_prog.grid(row=11, column=0, columnspan=3, sticky="ew", pady=(8, 6))
+        self.stitch_prog.grid(row=12, column=0, columnspan=3, sticky="ew", pady=(8, 6))
 
         bar = ttk.Frame(tab)
-        bar.grid(row=12, column=0, columnspan=3)
-        self.btn_run = ttk.Button(bar, text="Run orion", command=self._on_run_stitch)
+        bar.grid(row=13, column=0, columnspan=3)
+        self.btn_run = ttk.Button(bar, text="Run ashlar", command=self._on_run_stitch)
         self.btn_run.pack(side="left", padx=(0, 8))
         self.btn_cancel = ttk.Button(
             bar, text="Cancel", state="disabled", command=self._on_cancel_stitch
@@ -341,10 +334,10 @@ class App:
     def _toggle_orion(self):
         if self._orion_open:
             self.orion_frm.grid_remove()
-            self.orion_toggle_btn.configure(text="▶ Orion options")
+            self.orion_toggle_btn.configure(text="▶ Debug settings")
         else:
             self.orion_frm.grid()
-            self.orion_toggle_btn.configure(text="▼ Orion options")
+            self.orion_toggle_btn.configure(text="▼ Debug settings")
         self._orion_open = not self._orion_open
 
     def _build_orion_options(self, frm, vint, vfloat):
@@ -353,7 +346,8 @@ class App:
         row1 = ttk.Frame(frm)
         row1.grid(row=0, column=0, columnspan=3, sticky="w", pady=2)
         for label, var, lo, hi, inc, w, vcmd in [
-            ("Assembly jobs", self.njobs_var, 1, 64, 1, 4, vint),
+            ("Max shift µm", self.margin_var, 0, 500, 5, 5, vint),
+            ("Filter sigma", self.sigma_var, 0, 10, 0.5, 4, vfloat),
             ("Align channel", self.align_channel_var, 0, 99, 1, 4, vint),
             ("Stitch alpha", self.stitch_alpha_var, 0, 1, 0.01, 6, vfloat),
         ]:
@@ -376,22 +370,15 @@ class App:
             validate="key", validatecommand=vfloat,
         ).pack(side="left")
 
-        self._dir_row(frm, 2, "Temp dir", self.temp_dir_var)
-
-        row4 = ttk.Frame(frm)
-        row4.grid(row=3, column=0, columnspan=3, sticky="w", pady=2)
-        ttk.Checkbutton(row4, text="No mask background", variable=self.no_mask_var).pack(
-            side="left", padx=(0, 8)
-        )
-        ttk.Checkbutton(row4, text="Only QC", variable=self.only_qc_var).pack(
-            side="left", padx=(0, 8)
-        )
-        ttk.Checkbutton(row4, text="Flip mosaic X", variable=self.flip_mx_var).pack(
-            side="left", padx=(0, 8)
-        )
-        ttk.Checkbutton(row4, text="Flip mosaic Y", variable=self.flip_my_var).pack(
-            side="left"
-        )
+        row3 = ttk.Frame(frm)
+        row3.grid(row=2, column=0, columnspan=3, sticky="w", pady=2)
+        for text, var in [
+            ("Flip X", self.flip_x_var),
+            ("Flip Y", self.flip_y_var),
+            ("Flip mosaic X", self.flip_mx_var),
+            ("Flip mosaic Y", self.flip_my_var),
+        ]:
+            ttk.Checkbutton(row3, text=text, variable=var).pack(side="left", padx=(0, 8))
 
     def _on_make_samplesheet(self):
         from tkinter import messagebox
@@ -481,9 +468,6 @@ class App:
                 slides = list(csv.DictReader(f))
 
         try:
-            from_idx = self.from_var.get()
-            to_raw = self.to_var.get().strip()
-            to_idx = int(to_raw) if to_raw else None
             max_jobs = self.jobs_var.get()
             max_shift = self.margin_var.get()
             sigma = self.sigma_var.get()  # 0 → orion's default (no filtering); handled in core
@@ -499,11 +483,11 @@ class App:
         except (ValueError, self.tk.TclError):
             messagebox.showerror(
                 "Invalid input",
-                "Numeric fields (slide range, jobs, shift, sigma, align channel, "
-                "stitch alpha, output channels, max error) must be valid numbers.",
+                "Numeric fields (jobs, shift, sigma, align channel, stitch alpha, "
+                "output channels, max error) must be valid numbers.",
             )
             return
-        subset = slides[from_idx:to_idx]
+        subset = slides
 
         markers_names = None
         m_path = self.markers_var.get().strip().strip('"')
@@ -564,6 +548,8 @@ class App:
                         output_channels=output_channels,
                         stitch_alpha=stitch_alpha,
                         max_error=max_error,
+                        flip_x=self.flip_x_var.get(),
+                        flip_y=self.flip_y_var.get(),
                         n_jobs=njobs,
                         temp_dir=self.temp_dir_var.get().strip().strip('"') or None,
                         no_mask_background=self.no_mask_var.get(),
@@ -572,7 +558,7 @@ class App:
                         flip_mosaic_y=self.flip_my_var.get(),
                     ),
                     markers_names=markers_names,
-                    extract_pysed_markers=self.auto_names_var.get(),
+                    extract_pysed_markers=True,
                     dry_run=self.dry_var.get(),
                     skip_existing=self.skip_var.get(),
                     output_dir=output_dir,
@@ -877,12 +863,15 @@ class App:
         ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 6))
 
         self._dir_row(tab, 1, "Input folder *", self.cz_input_var)
-        self._dir_row(tab, 2, "Output directory *", self.cz_output_var)
+        self.cz_out_entry, self.cz_out_btn = self._dir_row(
+            tab, 2, "Output directory *", self.cz_output_var
+        )
 
         ttk.Checkbutton(
             tab, text="Compress in place (overwrite originals)",
             variable=self.cz_inplace_var, command=self._on_inplace_toggle,
         ).grid(row=3, column=0, columnspan=3, sticky="w", pady=2)
+        self._on_inplace_toggle()  # apply initial enabled/disabled state
 
         self.cz_prog = ttk.Progressbar(tab, mode="indeterminate")
         self.cz_prog.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(8, 6))
@@ -897,8 +886,10 @@ class App:
         self.compress_cancel = threading.Event()
 
     def _on_inplace_toggle(self):
-        # output dir is irrelevant when compressing in place
-        pass
+        # the output dir is irrelevant when compressing in place — grey it out
+        state = "disabled" if self.cz_inplace_var.get() else "normal"
+        self.cz_out_entry.configure(state=state)
+        self.cz_out_btn.configure(state=state)
 
     def _on_compress(self):
         from tkinter import messagebox

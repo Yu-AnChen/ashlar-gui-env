@@ -43,14 +43,6 @@ def build_parser():
     )
     sp.add_argument("csv_filepath", metavar="CSVFILE", help="CSV config file")
     sp.add_argument(
-        "-f", "--from-dir", type=int, default=0, metavar="FROM",
-        help="Starting slide index (0-based, default 0)",
-    )
-    sp.add_argument(
-        "-t", "--to-dir", type=int, default=None, metavar="TO",
-        help="Ending slide index, exclusive (default: all)",
-    )
-    sp.add_argument(
         "--markers", metavar="MARKERS",
         help="markers file applied to every slide (overrides per-sample extraction)",
     )
@@ -102,6 +94,8 @@ def build_parser():
         "--only-qc", action="store_true",
         help="Run alignment and write QC plots/pickles only; skip mosaic generation",
     )
+    sp.add_argument("--flip-x", action="store_true", help="Flip tile positions left-to-right")
+    sp.add_argument("--flip-y", action="store_true", help="Flip tile positions top-to-bottom")
     sp.add_argument("--flip-mosaic-x", action="store_true", help="Flip output image left-to-right")
     sp.add_argument("--flip-mosaic-y", action="store_true", help="Flip output image top-to-bottom")
     sp.add_argument(
@@ -115,7 +109,7 @@ def build_parser():
         "--file-type", choices=["rcpnl", "xdce", "pysed.ome.tif"], default=None,
         metavar="TYPE",
         help="Cycle file type for directory format (default: auto-detect rcpnl then xdce). "
-        "pysed.ome.tif automatically adds --flip-y.",
+        "pysed.ome.tif inputs are y-flipped automatically by rcashlar-orion.",
     )
     sp.add_argument(
         "--input-format", choices=["directory", "mcmicro"], default="directory",
@@ -235,12 +229,14 @@ def cmd_stitch(args, parser):
         temp_dir=args.temp_dir,
         no_mask_background=args.no_mask_background,
         only_qc=args.only_qc,
+        flip_x=args.flip_x,
+        flip_y=args.flip_y,
         flip_mosaic_x=args.flip_mosaic_x,
         flip_mosaic_y=args.flip_mosaic_y,
     )
     try:
         core.run_batch(
-            slides[args.from_dir : args.to_dir],
+            slides,
             max_n_jobs=args.max_n_jobs,
             cancel_event=cancel_event,
             orion=orion,

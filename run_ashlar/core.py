@@ -6,6 +6,7 @@ the CLI (run_ashlar.cli). It must not import tkinter.
 
 import csv
 import logging
+import os
 import platform
 import re
 import shlex
@@ -16,6 +17,7 @@ import tempfile
 import time
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path
 
 # ── generic helpers ─────────────────────────────────────────────────────────────
@@ -23,6 +25,39 @@ from pathlib import Path
 
 def _text_to_bool(text):
     return bool(text) and str(text).lower() in ("1", "yes", "y", "true", "t")
+
+
+def _cpu_count():
+    try:
+        return len(os.sched_getaffinity(0))
+    except AttributeError:  # not available on macOS / Windows
+        return os.cpu_count() or 1
+
+
+def clamp_parallelism(x, y, cpu=None):
+    """Constrain parallel-slides x and assembly-jobs y to a sane resource budget.
+
+    Each parallel slide holds a full mosaic in RAM, so x is hard-capped at 4 and
+    x*y is kept under ~1.5*cpu. Only x is reduced (it drives memory); y is left
+    as-is. Returns (x, y, messages); messages explains any clamp that happened.
+    """
+    cpu = cpu or _cpu_count()
+    x = max(1, x)
+    y = max(1, y)
+    msgs = []
+    if x > 4:
+        msgs.append(f"Capping parallel slides {x}→4 (max 4)")
+        x = 4
+    budget = max(1, int(1.5 * cpu))
+    if x * y > budget:
+        new_x = max(1, budget // y)
+        if new_x != x:
+            msgs.append(
+                f"Reducing parallel slides {x}→{new_x} to fit budget "
+                f"(cores={cpu}, assembly-jobs={y})"
+            )
+            x = new_x
+    return x, y, msgs
 
 
 def _unc(path):
@@ -431,7 +466,7 @@ def _generate_ffp(
 def _run_ashlar(cmd, log_path, slide_name, pipe_to_console=True, cancel_event=None):
     """Run ashlar via Popen, streaming output to a log file and optionally the console."""
     try:
-        version = subprocess.check_output(["ashlar", "--version"]).decode().strip()
+        version = subprocess.check_output([cmd[0], "--version"]).decode().strip()
     except Exception:
         version = "unknown"
 
@@ -466,6 +501,32 @@ def _run_ashlar(cmd, log_path, slide_name, pipe_to_console=True, cancel_event=No
     return proc.returncode
 
 
+@dataclass
+class OrionOptions:
+    """rcashlar-orion tunables, grouped by how they vary.
+
+    Group b (sensible global default, could vary per slide later): maximum_shift,
+    filter_sigma, align_channel, output_channels, stitch_alpha, max_error.
+    Group a (one value per run): n_jobs, temp_dir, no_mask_background, only_qc,
+    flip_mosaic_x, flip_mosaic_y.
+    """
+
+    # group b — alignment / output (per-slide-capable)
+    maximum_shift: float = 30
+    filter_sigma: float = 1.0
+    align_channel: int = 0
+    output_channels: list | None = None
+    stitch_alpha: float = 0.01
+    max_error: float | None = None
+    # group a — run-wide execution
+    n_jobs: int = 5
+    temp_dir: str | None = None
+    no_mask_background: bool = False
+    only_qc: bool = False
+    flip_mosaic_x: bool = False
+    flip_mosaic_y: bool = False
+
+
 def process_slide(
     slide,
     *,
@@ -473,13 +534,12 @@ def process_slide(
     extract_pysed_markers=True,
     dry_run=False,
     skip_existing=False,
-    maximum_shift=30,
-    filter_sigma=1,
     output_dir=None,
     file_type=None,
     pipe_ashlar_to_console=True,
     cancel_event=None,
     progress=None,
+    orion=None,
 ):
     """Stitch one slide: find cycle files, run ashlar, then write channel names.
 
@@ -491,6 +551,7 @@ def process_slide(
          (its runtime is the review window) take effect.
       3. otherwise channel names are left untouched.
     """
+    orion = orion or OrionOptions()
     if cancel_event and cancel_event.is_set():
         return False
 
@@ -577,17 +638,39 @@ def process_slide(
                 cycle_files, illum_dir, detected_type, dry_run, cancel_event, progress
             )
 
-    # build ashlar command (pyramidal OME-TIFF output is automatic for .ome.tif)
+    # build rcashlar-orion command (pyramidal OME-TIFF output is always on)
     cmd = [
-        "ashlar",
+        "rcashlar-orion",
         *[str(f) for f in cycle_files],
-        "-m",
-        str(maximum_shift),
         "-o",
         str(out_tif),
+        "-m",
+        str(orion.maximum_shift),
     ]
-    if filter_sigma:  # 0 or None → ashlar's default (no filtering)
-        cmd += ["--filter-sigma", str(filter_sigma)]
+    if orion.filter_sigma:  # 0 or None → orion's default (no filtering)
+        cmd += ["--filter-sigma", str(orion.filter_sigma)]
+    if orion.align_channel:  # 0 is orion's default
+        cmd += ["-c", str(orion.align_channel)]
+    if orion.output_channels:
+        # NOTE: subsets the written channels — when exposed, the marker-apply
+        # step below must subset in lockstep or the channel-count check fails.
+        cmd += ["--output-channels", *[str(c) for c in orion.output_channels]]
+    if orion.stitch_alpha is not None:
+        cmd += ["--stitch-alpha", str(orion.stitch_alpha)]
+    if orion.max_error is not None:
+        cmd += ["--maximum-error", str(orion.max_error)]
+    if orion.n_jobs:
+        cmd += ["--n-jobs", str(orion.n_jobs)]
+    if orion.temp_dir:
+        cmd += ["--temp-dir", str(orion.temp_dir)]
+    if orion.no_mask_background:
+        cmd += ["--no-mask-background"]
+    if orion.only_qc:
+        cmd += ["--only-qc"]
+    if orion.flip_mosaic_x:
+        cmd += ["--flip-mosaic-x"]
+    if orion.flip_mosaic_y:
+        cmd += ["--flip-mosaic-y"]
     if ffp_list:
         cmd += ["--ffp", *ffp_list]
     if is_pysed:
@@ -637,7 +720,9 @@ def process_slide(
     return True
 
 
-def run_batch(slides, *, max_n_jobs=1, cancel_event=None, on_status=None, **kwargs):
+def run_batch(
+    slides, *, max_n_jobs=1, cancel_event=None, on_status=None, orion=None, **kwargs
+):
     """Run process_slide for each slide, in parallel when max_n_jobs > 1.
 
     Ashlar output is always written to per-slide log files. It is also piped to
@@ -649,6 +734,10 @@ def run_batch(slides, *, max_n_jobs=1, cancel_event=None, on_status=None, **kwar
     finishes. It may be called from worker threads, so the callback must be
     thread-safe and must not touch GUI widgets directly.
     """
+    orion = orion or OrionOptions()
+    max_n_jobs, _, clamp_msgs = clamp_parallelism(max_n_jobs, orion.n_jobs)
+    for m in clamp_msgs:
+        logging.info(m)
     kwargs.setdefault("pipe_ashlar_to_console", max_n_jobs == 1)
 
     def _run_one(slide):
@@ -658,7 +747,7 @@ def run_batch(slides, *, max_n_jobs=1, cancel_event=None, on_status=None, **kwar
             report("running")
         try:
             ok = process_slide(
-                slide, cancel_event=cancel_event, progress=report, **kwargs
+                slide, cancel_event=cancel_event, progress=report, orion=orion, **kwargs
             )
         except Exception as e:
             logging.error(f"[{key}] Unexpected error: {e}")

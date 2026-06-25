@@ -59,8 +59,12 @@ def build_parser():
         help="directory for output OME-TIFFs (default: next to each slide folder)",
     )
     sp.add_argument(
-        "--max-n-jobs", type=int, default=1, metavar="N",
-        help="Max parallel ashlar jobs (default: 1)",
+        "--max-n-jobs", type=int, default=2, metavar="N",
+        help="Parallel slides X (default: 2, capped at 4; X*--n-jobs bounded by CPU)",
+    )
+    sp.add_argument(
+        "--n-jobs", type=int, default=5, metavar="N",
+        help="Orion assembly jobs per slide (default: 5)",
     )
     sp.add_argument(
         "--maximum-shift", type=int, default=30, metavar="SHIFT",
@@ -70,6 +74,36 @@ def build_parser():
         "--filter-sigma", type=float, default=1, metavar="SIGMA",
         help="Gaussian pre-filter sigma in pixels (default: 1)",
     )
+    sp.add_argument(
+        "-c", "--align-channel", type=int, default=0, metavar="CH",
+        help="Channel index to align on (default: 0)",
+    )
+    sp.add_argument(
+        "--output-channels", type=int, nargs="+", default=None, metavar="CH",
+        help="Subset of channel indices to write (default: all)",
+    )
+    sp.add_argument(
+        "--stitch-alpha", type=float, default=0.01, metavar="A",
+        help="Stitching alpha parameter (default: 0.01)",
+    )
+    sp.add_argument(
+        "--maximum-error", type=float, default=None, metavar="E",
+        help="Maximum alignment error tolerance (default: orion's auto)",
+    )
+    sp.add_argument(
+        "--temp-dir", default=None, metavar="DIR",
+        help="Scratch dir for the intermediate zarr (default: $ASHLAR_TMPDIR or output dir)",
+    )
+    sp.add_argument(
+        "--no-mask-background", action="store_true",
+        help="Do not automatically mask out the background region",
+    )
+    sp.add_argument(
+        "--only-qc", action="store_true",
+        help="Run alignment and write QC plots/pickles only; skip mosaic generation",
+    )
+    sp.add_argument("--flip-mosaic-x", action="store_true", help="Flip output image left-to-right")
+    sp.add_argument("--flip-mosaic-y", action="store_true", help="Flip output image top-to-bottom")
     sp.add_argument(
         "--skip-existing", action="store_true",
         help="Skip slides whose output OME-TIFF already exists",
@@ -190,17 +224,30 @@ def cmd_stitch(args, parser):
     markers_names = core.read_markers(args.markers) if args.markers else None
 
     cancel_event = threading.Event()
+    orion = core.OrionOptions(
+        maximum_shift=args.maximum_shift,
+        filter_sigma=args.filter_sigma,
+        align_channel=args.align_channel,
+        output_channels=args.output_channels,
+        stitch_alpha=args.stitch_alpha,
+        max_error=args.maximum_error,
+        n_jobs=args.n_jobs,
+        temp_dir=args.temp_dir,
+        no_mask_background=args.no_mask_background,
+        only_qc=args.only_qc,
+        flip_mosaic_x=args.flip_mosaic_x,
+        flip_mosaic_y=args.flip_mosaic_y,
+    )
     try:
         core.run_batch(
             slides[args.from_dir : args.to_dir],
             max_n_jobs=args.max_n_jobs,
             cancel_event=cancel_event,
+            orion=orion,
             markers_names=markers_names,
             extract_pysed_markers=not args.no_extract_markers,
             dry_run=args.dry_run,
             skip_existing=args.skip_existing,
-            maximum_shift=args.maximum_shift,
-            filter_sigma=args.filter_sigma,
             output_dir=args.output_dir,
             file_type=args.file_type,
         )

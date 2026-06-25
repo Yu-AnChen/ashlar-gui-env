@@ -181,7 +181,7 @@ class App:
         self.output_dir_var = tk.StringVar()
         self.from_var = tk.IntVar(value=0)
         self.to_var = tk.StringVar(value="")
-        self.jobs_var = tk.IntVar(value=1)
+        self.jobs_var = tk.IntVar(value=2)
         self.margin_var = tk.IntVar(value=30)
         self.sigma_var = tk.DoubleVar(value=1.0)
         self.dry_var = tk.BooleanVar(value=False)
@@ -259,7 +259,7 @@ class App:
             validate="key", validatecommand=vint,
         ).pack(side="left", padx=(0, 16))
         for label, var, lo, hi, inc, w, vcmd in [
-            ("Max jobs", self.jobs_var, 1, 64, 1, 4, vint),
+            ("Max jobs", self.jobs_var, 1, 4, 1, 4, vint),
             ("Max shift µm", self.margin_var, 0, 500, 5, 5, vint),
             ("Filter sigma", self.sigma_var, 0, 10, 0.5, 4, vfloat),
         ]:
@@ -467,12 +467,13 @@ class App:
                     max_n_jobs=max_jobs,
                     cancel_event=self.stitch_cancel,
                     on_status=self._set_slide_status,
+                    orion=core.OrionOptions(
+                        maximum_shift=max_shift, filter_sigma=sigma
+                    ),
                     markers_names=markers_names,
                     extract_pysed_markers=self.auto_names_var.get(),
                     dry_run=self.dry_var.get(),
                     skip_existing=self.skip_var.get(),
-                    maximum_shift=max_shift,
-                    filter_sigma=sigma,
                     output_dir=output_dir,
                     file_type=None if ft == "auto" else ft,
                 )

@@ -539,14 +539,14 @@ class App:
             return txt
 
         def update_summary():
-            lines = ["  {:<10}  {}".format("status", "slide"), "  " + "─" * 46]
+            lines = ["  {:<16}  {}".format("status", "slide"), "  " + "─" * 52]
             for key, log_path in self.active_log_paths:
                 slide_name = log_path.name.replace("-ashlar.log", "")
                 # status comes from the batch itself, not from output timestamps
                 status = self.slide_status.get(key)
                 if status is None:
                     status = "waiting" if not self.batch_done[0] else "---"
-                lines.append(f"  {status:<10}  {slide_name}")
+                lines.append(f"  {status:<16}  {slide_name}")
             sum_txt.configure(state="normal")
             sum_txt.delete("1.0", "end")
             sum_txt.insert("end", "\n".join(lines) + "\n")

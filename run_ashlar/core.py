@@ -372,14 +372,23 @@ _BASICPY_MANIFEST = Path(__file__).resolve().parent.parent / "basicpy-env" / "pi
 _BASICPY_MAIN = Path(__file__).resolve().parent.parent / "basicpy-env" / "main.py"
 
 
-def _generate_ffp(cycle_files, illum_dir, file_type, dry_run=False, cancel_event=None):
-    """Generate flat-field profiles using basicpy (subprocess). Returns list of ffp paths."""
+def _generate_ffp(
+    cycle_files, illum_dir, file_type, dry_run=False, cancel_event=None, progress=None
+):
+    """Generate flat-field profiles using basicpy (subprocess). Returns list of ffp paths.
+
+    progress, if given, is called as progress('flat-field i/N') as each profile is
+    processed, so a caller can surface the BaSiC phase in a status display.
+    """
     Path(_unc(illum_dir)).mkdir(exist_ok=True, parents=True)
     ffp_list = []
-    for cycle_file in cycle_files:
+    n = len(cycle_files)
+    for i, cycle_file in enumerate(cycle_files, 1):
         if cancel_event and cancel_event.is_set():
             logging.info("    FFP generation cancelled")
             break
+        if progress:
+            progress(f"flat-field {i}/{n}")
         stem = cycle_file.name.replace(f".{file_type}", "")
         ffp_path = Path(_unc(illum_dir / f"{stem}-ffp.ome.tif"))
         if ffp_path.exists():
@@ -470,6 +479,7 @@ def process_slide(
     file_type=None,
     pipe_ashlar_to_console=True,
     cancel_event=None,
+    progress=None,
 ):
     """Stitch one slide: find cycle files, run ashlar, then write channel names.
 
@@ -564,7 +574,7 @@ def process_slide(
             )
         else:
             ffp_list = _generate_ffp(
-                cycle_files, illum_dir, detected_type, dry_run, cancel_event
+                cycle_files, illum_dir, detected_type, dry_run, cancel_event, progress
             )
 
     # build ashlar command (pyramidal OME-TIFF output is automatic for .ome.tif)
@@ -589,6 +599,8 @@ def process_slide(
         logging.info(f"[{slide_name}] [dry-run] skipping execution")
         return True
 
+    if progress:
+        progress("stitching")
     returncode = _run_ashlar(
         cmd, log_path, slide_name, pipe_ashlar_to_console, cancel_event=cancel_event
     )
@@ -641,16 +653,19 @@ def run_batch(slides, *, max_n_jobs=1, cancel_event=None, on_status=None, **kwar
 
     def _run_one(slide):
         key = _slide_key(slide)
-        if on_status:
-            on_status(key, "running")
+        report = (lambda s: on_status(key, s)) if on_status else None
+        if report:
+            report("running")
         try:
-            ok = process_slide(slide, cancel_event=cancel_event, **kwargs)
+            ok = process_slide(
+                slide, cancel_event=cancel_event, progress=report, **kwargs
+            )
         except Exception as e:
             logging.error(f"[{key}] Unexpected error: {e}")
             ok = False
-        if on_status:
+        if report:
             cancelled = bool(cancel_event and cancel_event.is_set())
-            on_status(key, "done" if ok else ("cancelled" if cancelled else "failed"))
+            report("done" if ok else ("cancelled" if cancelled else "failed"))
         return key, ok
 
     results = {}

@@ -189,6 +189,19 @@ class App:
         self.auto_names_var = tk.BooleanVar(value=True)
         self.file_type_var = tk.StringVar(value="auto")
 
+        # orion options (collapsible)
+        self._orion_open = False
+        self.njobs_var = tk.IntVar(value=5)
+        self.align_channel_var = tk.IntVar(value=0)
+        self.stitch_alpha_var = tk.DoubleVar(value=0.01)
+        self.output_channels_var = tk.StringVar()
+        self.max_error_var = tk.StringVar()
+        self.temp_dir_var = tk.StringVar()
+        self.no_mask_var = tk.BooleanVar(value=False)
+        self.only_qc_var = tk.BooleanVar(value=False)
+        self.flip_mx_var = tk.BooleanVar(value=False)
+        self.flip_my_var = tk.BooleanVar(value=False)
+
         # ── collapsible samplesheet helper ───────────────────────────────────────
         self._helper_open = False
         self.helper_batch_var = tk.StringVar()
@@ -282,12 +295,24 @@ class App:
             opts2, text="Auto-extract pysed channel names", variable=self.auto_names_var
         ).pack(side="left")
 
+        # ── collapsible Orion options ────────────────────────────────────────────
+        self.orion_toggle_btn = ttk.Button(
+            tab, text="▶ Orion options", command=self._toggle_orion
+        )
+        self.orion_toggle_btn.grid(row=9, column=0, columnspan=3, sticky="w", pady=(6, 2))
+
+        self.orion_frm = ttk.LabelFrame(tab, padding=4)
+        self.orion_frm.columnconfigure(1, weight=1)
+        self.orion_frm.grid(row=10, column=0, columnspan=3, sticky="ew")
+        self.orion_frm.grid_remove()
+        self._build_orion_options(self.orion_frm, vint, vfloat)
+
         self.stitch_prog = ttk.Progressbar(tab, mode="indeterminate")
-        self.stitch_prog.grid(row=9, column=0, columnspan=3, sticky="ew", pady=(8, 6))
+        self.stitch_prog.grid(row=11, column=0, columnspan=3, sticky="ew", pady=(8, 6))
 
         bar = ttk.Frame(tab)
-        bar.grid(row=10, column=0, columnspan=3)
-        self.btn_run = ttk.Button(bar, text="Run ashlar", command=self._on_run_stitch)
+        bar.grid(row=12, column=0, columnspan=3)
+        self.btn_run = ttk.Button(bar, text="Run orion", command=self._on_run_stitch)
         self.btn_run.pack(side="left", padx=(0, 8))
         self.btn_cancel = ttk.Button(
             bar, text="Cancel", state="disabled", command=self._on_cancel_stitch
@@ -312,6 +337,61 @@ class App:
             self.helper_frm.grid()
             self.toggle_btn.configure(text="▼ Samplesheet helper")
         self._helper_open = not self._helper_open
+
+    def _toggle_orion(self):
+        if self._orion_open:
+            self.orion_frm.grid_remove()
+            self.orion_toggle_btn.configure(text="▶ Orion options")
+        else:
+            self.orion_frm.grid()
+            self.orion_toggle_btn.configure(text="▼ Orion options")
+        self._orion_open = not self._orion_open
+
+    def _build_orion_options(self, frm, vint, vfloat):
+        ttk = self.ttk
+
+        row1 = ttk.Frame(frm)
+        row1.grid(row=0, column=0, columnspan=3, sticky="w", pady=2)
+        for label, var, lo, hi, inc, w, vcmd in [
+            ("Assembly jobs", self.njobs_var, 1, 64, 1, 4, vint),
+            ("Align channel", self.align_channel_var, 0, 99, 1, 4, vint),
+            ("Stitch alpha", self.stitch_alpha_var, 0, 1, 0.01, 6, vfloat),
+        ]:
+            ttk.Label(row1, text=label).pack(side="left", padx=(0, 2))
+            ttk.Spinbox(
+                row1, textvariable=var, from_=lo, to=hi, increment=inc, width=w,
+                validate="key", validatecommand=vcmd,
+            ).pack(side="left", padx=(0, 12))
+
+        row2 = ttk.Frame(frm)
+        row2.grid(row=1, column=0, columnspan=3, sticky="w", pady=2)
+        ttk.Label(row2, text="Output channels").pack(side="left", padx=(0, 2))
+        ttk.Entry(row2, textvariable=self.output_channels_var, width=16).pack(
+            side="left", padx=(0, 4)
+        )
+        ttk.Label(row2, text="(e.g. 0 1 2; blank = all)").pack(side="left", padx=(0, 16))
+        ttk.Label(row2, text="Max error").pack(side="left", padx=(0, 2))
+        ttk.Entry(
+            row2, textvariable=self.max_error_var, width=6,
+            validate="key", validatecommand=vfloat,
+        ).pack(side="left")
+
+        self._dir_row(frm, 2, "Temp dir", self.temp_dir_var)
+
+        row4 = ttk.Frame(frm)
+        row4.grid(row=3, column=0, columnspan=3, sticky="w", pady=2)
+        ttk.Checkbutton(row4, text="No mask background", variable=self.no_mask_var).pack(
+            side="left", padx=(0, 8)
+        )
+        ttk.Checkbutton(row4, text="Only QC", variable=self.only_qc_var).pack(
+            side="left", padx=(0, 8)
+        )
+        ttk.Checkbutton(row4, text="Flip mosaic X", variable=self.flip_mx_var).pack(
+            side="left", padx=(0, 8)
+        )
+        ttk.Checkbutton(row4, text="Flip mosaic Y", variable=self.flip_my_var).pack(
+            side="left"
+        )
 
     def _on_make_samplesheet(self):
         from tkinter import messagebox
@@ -406,11 +486,21 @@ class App:
             to_idx = int(to_raw) if to_raw else None
             max_jobs = self.jobs_var.get()
             max_shift = self.margin_var.get()
-            sigma = self.sigma_var.get()  # 0 → ashlar's default (no filtering); handled in core
+            sigma = self.sigma_var.get()  # 0 → orion's default (no filtering); handled in core
+            njobs = self.njobs_var.get()
+            align_channel = self.align_channel_var.get()
+            stitch_alpha = self.stitch_alpha_var.get()
+            oc_raw = self.output_channels_var.get().strip()
+            output_channels = (
+                [int(x) for x in oc_raw.replace(",", " ").split()] if oc_raw else None
+            )
+            me_raw = self.max_error_var.get().strip()
+            max_error = float(me_raw) if me_raw else None
         except (ValueError, self.tk.TclError):
             messagebox.showerror(
                 "Invalid input",
-                "From/To slide, Max jobs, Max shift, and Filter sigma must be numbers.",
+                "Numeric fields (slide range, jobs, shift, sigma, align channel, "
+                "stitch alpha, output channels, max error) must be valid numbers.",
             )
             return
         subset = slides[from_idx:to_idx]
@@ -468,7 +558,18 @@ class App:
                     cancel_event=self.stitch_cancel,
                     on_status=self._set_slide_status,
                     orion=core.OrionOptions(
-                        maximum_shift=max_shift, filter_sigma=sigma
+                        maximum_shift=max_shift,
+                        filter_sigma=sigma,
+                        align_channel=align_channel,
+                        output_channels=output_channels,
+                        stitch_alpha=stitch_alpha,
+                        max_error=max_error,
+                        n_jobs=njobs,
+                        temp_dir=self.temp_dir_var.get().strip().strip('"') or None,
+                        no_mask_background=self.no_mask_var.get(),
+                        only_qc=self.only_qc_var.get(),
+                        flip_mosaic_x=self.flip_mx_var.get(),
+                        flip_mosaic_y=self.flip_my_var.get(),
                     ),
                     markers_names=markers_names,
                     extract_pysed_markers=self.auto_names_var.get(),

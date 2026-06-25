@@ -698,7 +698,13 @@ def process_slide(
     # made during the ashlar run are honored.
     names_to_apply = None
     source = None
-    if markers_names is not None:
+    if orion.output_channels:
+        # orion writes a channel subset and names it from pysed metadata itself;
+        # our full-length markers would not match, so defer to orion's naming.
+        logging.info(
+            f"[{slide_name}] Channel naming left to orion (--output-channels subsets output)"
+        )
+    elif markers_names is not None:
         names_to_apply, source = markers_names, "provided markers"
     elif markers_path.exists():
         try:

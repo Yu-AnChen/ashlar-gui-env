@@ -70,12 +70,22 @@ class App:
             log_frame, height=12, width=96, state="disabled", font=(self.mono, 9)
         )
         self.log_text.grid(row=0, column=0, sticky="nsew")
-        ttk.Button(log_frame, text="Clear console", command=self._clear_console).grid(
-            row=1, column=0, sticky="e", pady=(4, 0)
+
+        # ── footer: version (left) + clear console (right), one line ──────────────
+        footer = ttk.Frame(outer)
+        footer.grid(row=3, column=0, sticky="ew", pady=(4, 0))
+        footer.columnconfigure(0, weight=1)
+        self.version_var = tk.StringVar(value="ashlar …")
+        ttk.Label(
+            footer, textvariable=self.version_var, foreground="#888", font=(self.mono, 9)
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Button(footer, text="Clear console", command=self._clear_console).grid(
+            row=0, column=1, sticky="e"
         )
 
         self._setup_logging()
         self.root.after(120, self._poll_log)
+        self._run_thread(self._load_version)
 
     # ── logging plumbing (shared) ────────────────────────────────────────────────
 
@@ -111,6 +121,10 @@ class App:
         self.log_text.configure(state="normal")
         self.log_text.delete("1.0", "end")
         self.log_text.configure(state="disabled")
+
+    def _load_version(self):
+        v = core.ashlar_version()
+        self.root.after(0, lambda: self.version_var.set(f"ashlar {v}"))
 
     # ── small widget helpers ─────────────────────────────────────────────────────
 
@@ -213,7 +227,7 @@ class App:
         )
         self.toggle_btn.grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 2))
 
-        self.helper_frm = ttk.LabelFrame(tab, padding=4)
+        self.helper_frm = ttk.Frame(tab, padding=(12, 2, 4, 4))
         self.helper_frm.columnconfigure(1, weight=1)
         self.helper_frm.grid(row=1, column=0, columnspan=3, sticky="ew")
         self.helper_frm.grid_remove()
@@ -255,7 +269,7 @@ class App:
 
         self._file_row(tab, 5, "Markers (override)", self.markers_var, [("CSV", "*.csv"), ("All", "*.*")])
         self._dir_row(tab, 6, "Output directory", self.output_dir_var)
-        self._dir_row(tab, 7, "Temp dir", self.temp_dir_var)
+        self._dir_row(tab, 7, "Cache directory", self.temp_dir_var)
 
         # key-level validation: block non-numeric typing before it can reach .get()
         vint = (self.root.register(lambda p: self._is_num_prefix(p, False)), "%P")
@@ -294,7 +308,7 @@ class App:
         )
         self.orion_toggle_btn.grid(row=10, column=0, columnspan=3, sticky="w", pady=(6, 2))
 
-        self.orion_frm = ttk.LabelFrame(tab, padding=4)
+        self.orion_frm = ttk.Frame(tab, padding=(12, 2, 4, 4))
         self.orion_frm.columnconfigure(1, weight=1)
         self.orion_frm.grid(row=11, column=0, columnspan=3, sticky="ew")
         self.orion_frm.grid_remove()

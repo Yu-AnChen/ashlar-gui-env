@@ -463,6 +463,21 @@ def _generate_ffp(
 # ── ashlar ───────────────────────────────────────────────────────────────────────
 
 
+def ashlar_version(command="ashlar"):
+    """Return the installed ashlar version (e.g. '2026.5.1+...'), or 'unknown'.
+
+    Shells out to `ashlar --version`; safe to call from a background thread.
+    """
+    try:
+        out = subprocess.check_output(
+            [command, "--version"], stderr=subprocess.STDOUT, text=True
+        )
+        line = next((ln for ln in out.splitlines() if ln.strip()), "")
+        return line.split()[-1] if line else "unknown"
+    except Exception:
+        return "unknown"
+
+
 def _run_ashlar(cmd, log_path, slide_name, pipe_to_console=True, cancel_event=None):
     """Run ashlar via Popen, streaming output to a log file and optionally the console."""
     try:

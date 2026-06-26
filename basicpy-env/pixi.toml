@@ -9,7 +9,7 @@ setup-basicpy = "python populate_scyjava_cache.py"
 
 [dependencies]
 python = "3.10.*"
-scipy = "<1.13"
+# scipy = "<1.13"
 # JVM is provided at runtime by scyjava/cjdk (downloads Zulu 11 on first use).
 
 [activation.env]

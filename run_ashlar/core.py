@@ -655,6 +655,12 @@ def process_slide(
                 cycle_files, illum_dir, detected_type, dry_run, cancel_event, progress
             )
 
+    # FFP generation can be cancelled mid-way (its subprocess is terminated and a
+    # partial ffp_list returned) — bail out before launching ashlar.
+    if cancel_event and cancel_event.is_set():
+        logging.info(f"[{slide_name}] Cancelled before stitching")
+        return False
+
     # build rcashlar-orion command (pyramidal OME-TIFF output is always on)
     cmd = [
         "rcashlar-orion",

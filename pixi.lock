@@ -143,7 +143,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/tomli-2.4.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/wheel-0.46.3-pyhd8ed1ab_0.conda
-      - pypi: git+https://github.com/Yu-AnChen/ashlar.git?rev=bf8c3326f6230c1b1d474256e4d49095b914d865#bf8c3326f6230c1b1d474256e4d49095b914d865
+      - pypi: git+https://github.com/Yu-AnChen/ashlar.git?rev=e2fe8bc9ec1f7e054a689b17a18d2745e795b7cd#e2fe8bc9ec1f7e054a689b17a18d2745e795b7cd
       - pypi: git+https://github.com/Yu-AnChen/compress-bg.git#f1bdd3aaaca1aa54d3fb8223b07f037066420b28
       - pypi: https://files.pythonhosted.org/packages/0c/7b/f9b09a7804ec7336effb96c26d37c29d27225783dc1501b7d62dcef6ae25/pillow-12.1.1-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/10/99/781fe0c827be2742bcc775efefccb3b048a3a9c6ce9aec0cbf4a101677e5/pytz-2026.1.post1-py2.py3-none-any.whl
@@ -180,6 +180,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/91/29/df4b9b42f2be0b623cbd5e2140cafcaa2bef0759a00b7b70104dcfe2fb51/joblib-1.4.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/98/78/01c019cdb5d6498122777c1a43056ebb3ebfeef2076d9d026bfe15583b2b/click-8.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a8/76/7727ef2ffa4b62fcab916686a68a0426b9b790139720e1934e8ba797e238/pydantic_core-2.41.5-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/b5/18/2598e8b1cf2e952fd05372507d20f79f45ac1149f3959374dbdb6b1c5bea/diplib-3.5.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/b7/16/bd2f5904557265882108dc2e04f18abc05ab0c2b7082ae9430091daf1d5c/Pint-0.24.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/b9/54/dd730b32ea14ea797530a4479b2ed46a6fb250f682a9cfb997e968bf0261/networkx-3.4.2-py3-none-any.whl
@@ -279,7 +280,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/sip-6.15.0-py310hc7786af_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/tk-8.6.13-h010d191_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
-      - pypi: git+https://github.com/Yu-AnChen/ashlar.git?rev=bf8c3326f6230c1b1d474256e4d49095b914d865#bf8c3326f6230c1b1d474256e4d49095b914d865
+      - pypi: git+https://github.com/Yu-AnChen/ashlar.git?rev=e2fe8bc9ec1f7e054a689b17a18d2745e795b7cd#e2fe8bc9ec1f7e054a689b17a18d2745e795b7cd
       - pypi: git+https://github.com/Yu-AnChen/compress-bg.git#f1bdd3aaaca1aa54d3fb8223b07f037066420b28
       - pypi: https://files.pythonhosted.org/packages/05/14/52d505b5c59ce73244f59c7a50ecf47093ce4765f116cdb98286a71eeca2/pyyaml-6.0.3-cp310-cp310-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/10/99/781fe0c827be2742bcc775efefccb3b048a3a9c6ce9aec0cbf4a101677e5/pytz-2026.1.post1-py2.py3-none-any.whl
@@ -332,6 +333,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/e6/ab/fb21f4c939bb440104cc2b396d3be1d9b7a9fd3c6c2a53d98c45b3d7c954/fsspec-2026.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e7/05/c19819d5e3d95294a6f5947fb9b9629efb316b96de511b418c53d245aae6/cycler-0.12.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/ec/bc/d43411d74aab52f6955d9414e1cebd2ad3bb1d2d6e8913622ffffaab88bc/diplib-3.4.1-cp310-cp310-macosx_12_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/ed/c9/142095e654c2b97133ff71df60979422717b29738b08bc8a1709a5d5e0d0/zarr-2.18.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f5/1f/a3b6b74a451ceb84b471caa75c934d2430a4d84395d38ef201d539f38cd1/lxml-5.4.0-cp310-cp310-macosx_10_9_universal2.whl
       - pypi: https://files.pythonhosted.org/packages/f6/47/de8f185a1f537fdb5117fcde7050472b8cde3561179e9a68e1a566a6e6c6/blessed-1.32.0-py3-none-any.whl
@@ -406,7 +408,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/vc14_runtime-14.44.35208-h818238b_34.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/vcomp14-14.44.35208-h818238b_34.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
-      - pypi: git+https://github.com/Yu-AnChen/ashlar.git?rev=bf8c3326f6230c1b1d474256e4d49095b914d865#bf8c3326f6230c1b1d474256e4d49095b914d865
+      - pypi: git+https://github.com/Yu-AnChen/ashlar.git?rev=e2fe8bc9ec1f7e054a689b17a18d2745e795b7cd#e2fe8bc9ec1f7e054a689b17a18d2745e795b7cd
       - pypi: git+https://github.com/Yu-AnChen/compress-bg.git#f1bdd3aaaca1aa54d3fb8223b07f037066420b28
       - pypi: https://files.pythonhosted.org/packages/01/e2/06e08230c26049740b2773952fbb12cc7186e5df655a73b1c30ba493e864/pywavelets-1.8.0-cp310-cp310-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/06/98/da4efa53c5f8cf208ea14461b37b417a30318e5d2b2b3930a6aa2ad6fe67/openslide_python-1.4.3-cp310-cp310-win_amd64.whl
@@ -419,6 +421,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/27/e3/0e0014d6ab159d48189e92044ace13b1e1fe9aa3024ba9f4e8cf172aa7c2/jinxed-1.3.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2a/fa/926c003379b19fca39dd4634818b00dec6c62d87faf628d1394e137354d4/pyyaml-6.0.3-cp310-cp310-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/2e/54/647ade08bf0db230bfea292f893923872fd20be6ac6f53b2b936ba839d75/zipp-3.23.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/2e/5d/c085e90c7d5227d8e4975a31896f4a2376456d11c8245c315e2b9a896a57/diplib-3.5.2-cp310-cp310-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/32/d5/f9a850d79b0851d1d4ef6456097579a9005b31fea68726a4ae5f2d82ddd9/threadpoolctl-3.6.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/33/d1/8bb87d21e9aeb323cc03034f5eaf2c8f69841e40e4853c2627edf8111ed3/termcolor-3.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/51/ac/e5d886f892666d2d1e5cb8c1a41146e1d79ae8896477b1153a21711d3b44/fasteners-0.20-py3-none-any.whl
@@ -3688,9 +3691,9 @@ packages:
   purls: []
   size: 388453
   timestamp: 1764777142545
-- pypi: git+https://github.com/Yu-AnChen/ashlar.git?rev=bf8c3326f6230c1b1d474256e4d49095b914d865#bf8c3326f6230c1b1d474256e4d49095b914d865
+- pypi: git+https://github.com/Yu-AnChen/ashlar.git?rev=e2fe8bc9ec1f7e054a689b17a18d2745e795b7cd#e2fe8bc9ec1f7e054a689b17a18d2745e795b7cd
   name: ashlar
-  version: 2026.5.1
+  version: 2026.5.1+32.ge2fe8bc9ec1f
   requires_dist:
   - numpy>=1.18.1
   - pyjnius>=1.2.1
@@ -3709,7 +3712,6 @@ packages:
   - palom>=2024.9.1
   - lxml>=5.2.1
   - ome-types>=0.6
-  - joblib<1.5
   - compress-bg @ git+https://github.com/Yu-AnChen/compress-bg.git
 - pypi: git+https://github.com/Yu-AnChen/compress-bg.git#f1bdd3aaaca1aa54d3fb8223b07f037066420b28
   name: compress-bg
@@ -4137,6 +4139,11 @@ packages:
   - pytest-enabler>=2.2 ; extra == 'enabler'
   - pytest-mypy ; extra == 'type'
   requires_python: '>=3.9'
+- pypi: https://files.pythonhosted.org/packages/2e/5d/c085e90c7d5227d8e4975a31896f4a2376456d11c8245c315e2b9a896a57/diplib-3.5.2-cp310-cp310-win_amd64.whl
+  name: diplib
+  version: 3.5.2
+  sha256: 77999593c36d3be63a63693ab09deb964e59882b0cf47b5090253a537aafe8a4
+  requires_python: '>=3.8'
 - pypi: https://files.pythonhosted.org/packages/2f/6c/330de89ae1087eb622bfca0177d32a7ece50c3ef07b28002de4757d9d875/contourpy-1.3.2-cp310-cp310-macosx_11_0_arm64.whl
   name: contourpy
   version: 1.3.2
@@ -4977,6 +4984,11 @@ packages:
   requires_dist:
   - typing-extensions>=4.14.1
   requires_python: '>=3.9'
+- pypi: https://files.pythonhosted.org/packages/b5/18/2598e8b1cf2e952fd05372507d20f79f45ac1149f3959374dbdb6b1c5bea/diplib-3.5.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+  name: diplib
+  version: 3.5.2
+  sha256: 5376f2097dbe77dd44c2b4b2ad8086c4412ac0a2808c54473b27a88ae77ad0c1
+  requires_python: '>=3.8'
 - pypi: https://files.pythonhosted.org/packages/b7/16/bd2f5904557265882108dc2e04f18abc05ab0c2b7082ae9430091daf1d5c/Pint-0.24.4-py3-none-any.whl
   name: pint
   version: 0.24.4
@@ -5621,6 +5633,11 @@ packages:
   requires_dist:
   - six>=1.5
   requires_python: '>=2.7,!=3.0.*,!=3.1.*,!=3.2.*'
+- pypi: https://files.pythonhosted.org/packages/ec/bc/d43411d74aab52f6955d9414e1cebd2ad3bb1d2d6e8913622ffffaab88bc/diplib-3.4.1-cp310-cp310-macosx_12_0_arm64.whl
+  name: diplib
+  version: 3.4.1
+  sha256: 6571a8d169d32b7b0b0d35dc254873b64312a827f661131e7a42606da26aee1b
+  requires_python: '>=3.6'
 - pypi: https://files.pythonhosted.org/packages/ed/c9/142095e654c2b97133ff71df60979422717b29738b08bc8a1709a5d5e0d0/zarr-2.18.3-py3-none-any.whl
   name: zarr
   version: 2.18.3

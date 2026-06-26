@@ -27,5 +27,6 @@ pywin32 = ">=311, <312"
 pyjnius = ">=1.6.1,<2"
 
 [pypi-dependencies]
-ashlar = { git = "https://github.com/Yu-AnChen/ashlar.git", rev = "bf8c3326f6230c1b1d474256e4d49095b914d865" }
+ashlar = { git = "https://github.com/Yu-AnChen/ashlar.git", rev = "e2fe8bc9ec1f7e054a689b17a18d2745e795b7cd" }
 palom = ">=2025.7"
+diplib = ">=3.4.1, <4"

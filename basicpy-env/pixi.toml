@@ -12,6 +12,14 @@ python = "3.10.*"
 scipy = "<1.13"
 # JVM is provided at runtime by scyjava/cjdk (downloads Zulu 11 on first use).
 
+[activation.env]
+# Windows: torch's pip wheel ships Intel OpenMP (libiomp5md.dll) while the
+# conda-forge stack uses LLVM OpenMP (libomp.dll). Without this, the two
+# runtimes loading into one process aborts with "OMP: Error #15". Harmless on
+# macOS/Linux (ignored when there's no duplicate). Safe for BaSiC's
+# deterministic, mostly-sequential math.
+KMP_DUPLICATE_LIB_OK = "TRUE"
+
 [pypi-dependencies]
 basicpy = "==2.0.0"
 bioio-bioformats = "==1.3.2"

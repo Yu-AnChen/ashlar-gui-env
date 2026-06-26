@@ -518,6 +518,15 @@ class App:
                 "Missing", "Output directory is required when using mcmicro samplesheet format."
             )
             return
+        if output_dir:
+            try:
+                Path(output_dir).mkdir(parents=True, exist_ok=True)
+            except OSError as e:
+                messagebox.showerror(
+                    "Output directory",
+                    f"Could not create output directory:\n{output_dir}\n\n{e}",
+                )
+                return
 
         # precompute log + output paths so the viewer can open immediately
         self.active_log_paths.clear()

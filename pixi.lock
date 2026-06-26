@@ -143,7 +143,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/tomli-2.4.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/wheel-0.46.3-pyhd8ed1ab_0.conda
-      - pypi: git+https://github.com/Yu-AnChen/ashlar.git?rev=e2fe8bc9ec1f7e054a689b17a18d2745e795b7cd#e2fe8bc9ec1f7e054a689b17a18d2745e795b7cd
+      - pypi: git+https://github.com/Yu-AnChen/ashlar.git?rev=d7b948be8f24b6d7d81bfbb2f8d9b256d64456f8#d7b948be8f24b6d7d81bfbb2f8d9b256d64456f8
       - pypi: git+https://github.com/Yu-AnChen/compress-bg.git#f1bdd3aaaca1aa54d3fb8223b07f037066420b28
       - pypi: https://files.pythonhosted.org/packages/0c/7b/f9b09a7804ec7336effb96c26d37c29d27225783dc1501b7d62dcef6ae25/pillow-12.1.1-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/10/99/781fe0c827be2742bcc775efefccb3b048a3a9c6ce9aec0cbf4a101677e5/pytz-2026.1.post1-py2.py3-none-any.whl
@@ -280,7 +280,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/sip-6.15.0-py310hc7786af_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/tk-8.6.13-h010d191_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
-      - pypi: git+https://github.com/Yu-AnChen/ashlar.git?rev=e2fe8bc9ec1f7e054a689b17a18d2745e795b7cd#e2fe8bc9ec1f7e054a689b17a18d2745e795b7cd
+      - pypi: git+https://github.com/Yu-AnChen/ashlar.git?rev=d7b948be8f24b6d7d81bfbb2f8d9b256d64456f8#d7b948be8f24b6d7d81bfbb2f8d9b256d64456f8
       - pypi: git+https://github.com/Yu-AnChen/compress-bg.git#f1bdd3aaaca1aa54d3fb8223b07f037066420b28
       - pypi: https://files.pythonhosted.org/packages/05/14/52d505b5c59ce73244f59c7a50ecf47093ce4765f116cdb98286a71eeca2/pyyaml-6.0.3-cp310-cp310-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/10/99/781fe0c827be2742bcc775efefccb3b048a3a9c6ce9aec0cbf4a101677e5/pytz-2026.1.post1-py2.py3-none-any.whl
@@ -408,7 +408,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/vc14_runtime-14.44.35208-h818238b_34.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/vcomp14-14.44.35208-h818238b_34.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
-      - pypi: git+https://github.com/Yu-AnChen/ashlar.git?rev=e2fe8bc9ec1f7e054a689b17a18d2745e795b7cd#e2fe8bc9ec1f7e054a689b17a18d2745e795b7cd
+      - pypi: git+https://github.com/Yu-AnChen/ashlar.git?rev=d7b948be8f24b6d7d81bfbb2f8d9b256d64456f8#d7b948be8f24b6d7d81bfbb2f8d9b256d64456f8
       - pypi: git+https://github.com/Yu-AnChen/compress-bg.git#f1bdd3aaaca1aa54d3fb8223b07f037066420b28
       - pypi: https://files.pythonhosted.org/packages/01/e2/06e08230c26049740b2773952fbb12cc7186e5df655a73b1c30ba493e864/pywavelets-1.8.0-cp310-cp310-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/06/98/da4efa53c5f8cf208ea14461b37b417a30318e5d2b2b3930a6aa2ad6fe67/openslide_python-1.4.3-cp310-cp310-win_amd64.whl
@@ -3691,9 +3691,9 @@ packages:
   purls: []
   size: 388453
   timestamp: 1764777142545
-- pypi: git+https://github.com/Yu-AnChen/ashlar.git?rev=e2fe8bc9ec1f7e054a689b17a18d2745e795b7cd#e2fe8bc9ec1f7e054a689b17a18d2745e795b7cd
+- pypi: git+https://github.com/Yu-AnChen/ashlar.git?rev=d7b948be8f24b6d7d81bfbb2f8d9b256d64456f8#d7b948be8f24b6d7d81bfbb2f8d9b256d64456f8
   name: ashlar
-  version: 2026.5.1+32.ge2fe8bc9ec1f
+  version: 2026.6.1
   requires_dist:
   - numpy>=1.18.1
   - pyjnius>=1.2.1

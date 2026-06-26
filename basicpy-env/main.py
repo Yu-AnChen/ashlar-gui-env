@@ -5,10 +5,8 @@ from argparse import ArgumentParser as AP
 from os.path import splitext
 from pathlib import Path
 
-import bioio_bioformats
 import cv2
-import dask
-import dask.diagnostics
+import jpype
 import numpy as np
 import scyjava
 import tifffile
@@ -50,6 +48,147 @@ def ensure_bioformats():
         )
     scyjava.config.add_classpath(str(BIOFORMATS_JAR))
     scyjava.start_jvm()
+
+
+# OME-TIFF filename suffixes whose plane layout we've verified to map correctly through
+# TifffileReader. Only these use the (much faster on network drives) tifffile pixel path
+# under --reader auto; everything else falls back to Bio-Formats.
+TRUSTED_OMETIFF_SUFFIXES = (".pysed.ome.tif",)
+
+
+def quiet_loci(level: str = "ERROR") -> None:
+    """Turn down Bio-Formats' very chatty logback output. Call after the JVM starts."""
+    DebugTools = jpype.JPackage("loci").common.DebugTools
+    try:
+        DebugTools.setRootLevel(level)
+    except Exception:  # older Bio-Formats fallback
+        DebugTools.enableLogging(level)
+
+
+def _pixtype2dtype(reader) -> np.dtype:
+    """loci PixelType int -> numpy dtype (mirrors bioio_bioformats.utils._pixtype2dtype)."""
+    FT = jpype.JPackage("loci").formats.FormatTools
+    fmt2type = {
+        int(FT.INT8): "i1",
+        int(FT.UINT8): "u1",
+        int(FT.INT16): "i2",
+        int(FT.UINT16): "u2",
+        int(FT.INT32): "i4",
+        int(FT.UINT32): "u4",
+        int(FT.FLOAT): "f4",
+        int(FT.DOUBLE): "f8",
+    }
+    endian = "<" if reader.isLittleEndian() else ">"
+    return np.dtype(endian + fmt2type[int(reader.getPixelType())])
+
+
+class BioformatsReader:
+    """Thin wrapper over a Java loci.formats.ImageReader.
+
+    series == FOV, channels live within a series. Provides both metadata and pixels.
+    """
+
+    def __init__(self, path: str):
+        self.r = jpype.JPackage("loci").formats.ImageReader()
+        self.r.setId(str(path))
+        if int(self.r.getRGBChannelCount()) > 1 or bool(self.r.isInterleaved()):
+            raise RuntimeError(
+                "RGB/interleaved planes are not supported; expected one grayscale "
+                "sample per plane."
+            )
+        self.n_series = int(self.r.getSeriesCount())
+        self.size_c = int(self.r.getEffectiveSizeC())
+        self.size_z = int(self.r.getSizeZ())
+        self.size_t = int(self.r.getSizeT())
+        self.height = int(self.r.getSizeY())
+        self.width = int(self.r.getSizeX())
+        self.dtype = _pixtype2dtype(self.r)
+
+    def read_plane(self, series: int, c: int, z: int = 0, t: int = 0) -> np.ndarray:
+        self.r.setSeries(series)
+        idx = self.r.getIndex(z, c, t)
+        buf = self.r.openBytes(idx)
+        return np.frombuffer(bytes(buf), self.dtype).reshape(self.height, self.width)
+
+    def close(self):
+        self.r.close()
+
+
+class TifffileReader:
+    """Read pixels via tifffile while taking structural metadata from Bio-Formats.
+
+    Reads from tifffile's flat page list (all IFDs in file order); the global page index
+    is ``series * planes_per_series + getIndex(z, c, t)`` where the within-series order
+    comes from Bio-Formats (`meta`) so it matches the file's dimension order. Only the
+    pixel reads use tifffile; counts/shape/dtype come from `meta`.
+    """
+
+    def __init__(self, path: str, meta: "BioformatsReader"):
+        self.tif = tifffile.TiffFile(str(path))
+        self.pages = self.tif.pages  # flat IFD list, file order
+        self.n_series = meta.n_series
+        self.size_c = meta.size_c
+        self.size_z = meta.size_z
+        self.size_t = meta.size_t
+        self.height, self.width = meta.height, meta.width
+        self.dtype = meta.dtype
+        self._planes_per_series = self.size_c * self.size_z * self.size_t
+        # Precompute the within-series plane order from Bio-Formats (no JNI in the loop).
+        self._local = {
+            (z, c, t): int(meta.r.getIndex(z, c, t))
+            for z in range(self.size_z)
+            for c in range(self.size_c)
+            for t in range(self.size_t)
+        }
+        expected = self.n_series * self._planes_per_series
+        if len(self.pages) < expected:
+            raise RuntimeError(
+                f"tifffile sees {len(self.pages)} pages but Bio-Formats implies "
+                f"{self.n_series}*{self._planes_per_series}={expected}; page layout not "
+                "understood."
+            )
+
+    def read_plane(self, series: int, c: int, z: int = 0, t: int = 0) -> np.ndarray:
+        idx = series * self._planes_per_series + self._local[(z, c, t)]
+        return self.pages[idx].asarray()
+
+    def close(self):
+        self.tif.close()
+
+
+def verify_plane_mapping(tiff_reader, meta, k: int = 6) -> None:
+    """Spot-check that TifffileReader and Bio-Formats return identical pixels for a
+    spread of planes, so a wrong plane mapping fails loudly instead of mis-slicing."""
+    series = sorted({0, meta.n_series - 1})
+    channels = sorted({0, meta.size_c - 1})
+    checks = [(s, c, 0, 0) for s in series for c in channels][:k]
+    for s, c, z, t in checks:
+        if not np.array_equal(
+            tiff_reader.read_plane(s, c, z, t), meta.read_plane(s, c, z, t)
+        ):
+            raise RuntimeError(
+                "tifffile vs Bio-Formats plane mismatch at "
+                f"(series={s}, c={c}, z={z}, t={t}); refusing to use the tifffile reader."
+            )
+
+
+def build_reader(path, args):
+    """Open a pixel reader for `path`. Metadata always comes from Bio-Formats; the
+    tifffile pixel path is used only for trusted OME-TIFF formats (or when forced),
+    after verifying its plane mapping against Bio-Formats."""
+    name = path.name.lower()
+    trusted = name.endswith(TRUSTED_OMETIFF_SUFFIXES)
+    use_tifffile = args.reader == "tifffile" or (args.reader == "auto" and trusted)
+
+    meta = BioformatsReader(str(path))
+    if not use_tifffile:
+        logger.info("Reading pixels via Bio-Formats")
+        return meta
+    logger.info("Reading pixels via tifffile (metadata via Bio-Formats)")
+    reader = TifffileReader(str(path), meta)
+    verify_plane_mapping(reader, meta)
+    meta.close()
+    return reader
 
 
 def get_args():
@@ -197,6 +336,17 @@ def get_args():
         help="Relative weight of the l0 norm cost in the Fourier domain for autotuning.",
     )
     optional.add_argument(
+        "--reader",
+        dest="reader",
+        choices=["auto", "bioformats", "tifffile"],
+        action="store",
+        required=False,
+        default="auto",
+        help="Pixel-read backend for single-file input. 'auto' uses tifffile only for "
+        f"trusted OME-TIFF formats ({', '.join(TRUSTED_OMETIFF_SUFFIXES)}) and Bio-Formats "
+        "otherwise; 'tifffile'/'bioformats' force the backend [default='auto'].",
+    )
+    optional.add_argument(
         "--output-flatfield",
         dest="output_flatfield",
         required=False,
@@ -241,6 +391,7 @@ def main(args):
     # Put the vendored Bio-Formats uber-jar on the classpath before any Reader
     # is constructed (sidesteps bioio_bioformats' fragile jgo/maven download).
     ensure_bioformats()
+    quiet_loci()
 
     # Run BASIC
     basic = BaSiC(
@@ -257,49 +408,50 @@ def main(args):
     flatfields = []
     darkfields = []
 
-    # dask.config.set(scheduler="synchronous")
-
     # Check if input is a folder or a file
     if args.input.is_file():
         logger.info(f"opening image at {args.input}")
-        image = bioio_bioformats.Reader(args.input)
-        if image.dims.order not in ("TCZYX", "MTCZYX"):
-            raise RuntimeError(f"Unexpected image dimension order: {image.dims.order}")
-        istack = image.get_xarray_dask_stack(
-            drop_non_matching_scenes=True,
-            scene_character="M",
-        )
-        if istack.dims != ("M", "T", "C", "Z", "Y", "X"):
-            raise RuntimeError(f"Unexpected stack dimension order: {istack.dims}")
-        istack = istack.stack(I=("M", "T", "Z")).transpose("C", "I", "Y", "X")
-        if len(istack.coords["I"]) < 2 and not args.ignore_single_image_error:
-            raise RuntimeError(
-                "The image is single sited. Was it saved in the correct way?"
-            )
-        for c, channel_stack in enumerate(istack, 1):
-            logger.info(f"Begin processing channel {c}")
-            channel_data = channel_stack.data
-            _, H, W = channel_data.shape
-
-            with dask.diagnostics.ProgressBar():
-                channel_data = channel_data.map_blocks(
-                    lambda x: cv2.resize(
-                        np.squeeze(x), dsize=(128, 128), interpolation=cv2.INTER_AREA
-                    )[np.newaxis],
-                    name=False,
-                ).compute()
-
-            if not args.no_autotune:
-                logger.info("Autotuning parameters")
-                basic.autotune(
-                    channel_data,
-                    fourier_l0_norm_cost_coef=args.autotune_fourier_l0_norm_cost_coef,
+        reader = build_reader(args.input, args)
+        try:
+            planes_idx = [
+                (s, z, t)
+                for s in range(reader.n_series)
+                for z in range(reader.size_z)
+                for t in range(reader.size_t)
+            ]
+            if len(planes_idx) < 2 and not args.ignore_single_image_error:
+                raise RuntimeError(
+                    "The image is single sited. Was it saved in the correct way?"
                 )
-            logger.info("Generating illumination correction profiles")
-            basic.fit(channel_data)
-            flatfields.append(_resize_back(basic.flatfield, H, W))
-            darkfields.append(_resize_back(basic.darkfield, H, W))
-            logger.info(f"End processing channel {c}")
+            H, W = reader.height, reader.width
+            n_planes = len(planes_idx)
+            for c in range(reader.size_c):
+                logger.info(f"Begin processing channel {c + 1}/{reader.size_c}")
+                logger.info(f"Reading and downsizing {n_planes} planes")
+                channel_data = np.stack(
+                    [
+                        cv2.resize(
+                            reader.read_plane(s, c, z, t),
+                            dsize=(128, 128),
+                            interpolation=cv2.INTER_AREA,
+                        )
+                        for s, z, t in planes_idx
+                    ]
+                )
+
+                if not args.no_autotune:
+                    logger.info("Autotuning parameters")
+                    basic.autotune(
+                        channel_data,
+                        fourier_l0_norm_cost_coef=args.autotune_fourier_l0_norm_cost_coef,
+                    )
+                logger.info("Generating illumination correction profiles")
+                basic.fit(channel_data)
+                flatfields.append(_resize_back(basic.flatfield, H, W))
+                darkfields.append(_resize_back(basic.darkfield, H, W))
+                logger.info(f"End processing channel {c + 1}/{reader.size_c}")
+        finally:
+            reader.close()
 
     # If input is a folder
     else:

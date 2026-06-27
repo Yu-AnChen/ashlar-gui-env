@@ -971,15 +971,39 @@ def find_pysed_files(root):
     return sorted(Path(root).rglob("*.pysed.ome.tif"))
 
 
+_PYSED_SUFFIX = ".pysed.ome.tif"
+_COMPRESS_MARKER = ".zip"
+
+
+def compressed_name(name):
+    """Insert the .zip compression marker before the .pysed.ome.tif suffix.
+
+    e.g. ``foo.pysed.ome.tif`` -> ``foo.zip.pysed.ome.tif``, so a glance at the
+    filename tells you it has been compressed. Idempotent: a name that already
+    carries the marker (or lacks the pysed suffix) is returned unchanged.
+    """
+    s = str(name)
+    if not s.lower().endswith(_PYSED_SUFFIX):
+        return s
+    base = s[: -len(_PYSED_SUFFIX)]
+    if base.lower().endswith(_COMPRESS_MARKER):
+        return s
+    return base + _COMPRESS_MARKER + _PYSED_SUFFIX
+
+
 def compress_pysed_batch(
     inputs, output_dir=None, *, in_place=False, base_dir=None, cancel_event=None
 ):
     """Compress many pysed files. Returns {str(path): bool}.
 
+    Outputs are renamed with a .zip marker before the suffix (foo.pysed.ome.tif
+    -> foo.zip.pysed.ome.tif) so a compressed file is recognizable by name.
+
     Non-destructive by default: each input is written under output_dir. When
     base_dir is given, the input's path relative to base_dir is mirrored under
     output_dir (avoids cross-folder name collisions). When in_place is True the
-    inputs are overwritten and output_dir/base_dir are ignored.
+    output lands beside the input and the original (un-renamed) file is removed,
+    so output_dir/base_dir are ignored.
     """
     results = {}
     for p in inputs:
@@ -988,12 +1012,14 @@ def compress_pysed_batch(
             break
         p = Path(p)
         if in_place:
-            out = p
+            out = p.with_name(compressed_name(p.name))
         else:
             rel = p.relative_to(base_dir) if base_dir is not None else Path(p.name)
-            out = Path(output_dir) / rel
+            out = Path(output_dir) / rel.with_name(compressed_name(rel.name))
         try:
             compress_pysed(p, out)
+            if in_place and out != p:
+                p.unlink(missing_ok=True)
             results[str(p)] = True
         except Exception as e:
             logging.error(f"Compress failed {p.name}: {e}")

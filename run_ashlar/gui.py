@@ -880,8 +880,9 @@ class App:
         ttk.Label(
             tab,
             text="Compress .pysed.ome.tif files (recursively under the input folder). "
-            "Output mirrors the input's subfolder structure; originals are kept unless "
-            "'Compress in place' is checked.",
+            "Outputs are renamed with a .zip marker (foo.pysed.ome.tif -> "
+            "foo.zip.pysed.ome.tif). Output mirrors the input's subfolder structure; "
+            "originals are kept unless 'Compress in place' is checked.",
             justify="left", wraplength=620,
         ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 6))
 

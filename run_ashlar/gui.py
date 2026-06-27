@@ -39,7 +39,11 @@ class App:
         self.root = tk.Tk()
         self.root.title("run-ashlar")
         self.root.resizable(True, True)
-        self.mono = "Cascadia Code" if "Cascadia Code" in tkfont.families() else "Courier"
+        self.mono = (
+            ("Cascadia Code", 9)
+            if "Cascadia Code" in tkfont.families()
+            else "TkFixedFont"
+        )
 
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
@@ -67,7 +71,7 @@ class App:
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
         self.log_text = scrolledtext.ScrolledText(
-            log_frame, height=12, width=96, state="disabled", font=(self.mono, 9)
+            log_frame, height=12, width=96, state="disabled", font=self.mono
         )
         self.log_text.grid(row=0, column=0, sticky="nsew")
 
@@ -77,7 +81,7 @@ class App:
         footer.columnconfigure(0, weight=1)
         self.version_var = tk.StringVar(value="ashlar …")
         ttk.Label(
-            footer, textvariable=self.version_var, foreground="#888", font=(self.mono, 9)
+            footer, textvariable=self.version_var, foreground="#888", font=self.mono
         ).grid(row=0, column=0, sticky="w")
         ttk.Button(footer, text="Clear console", command=self._clear_console).grid(
             row=0, column=1, sticky="e"
@@ -629,7 +633,7 @@ class App:
         sum_frame.columnconfigure(0, weight=1)
         sum_frame.rowconfigure(0, weight=1)
         sum_txt = scrolledtext.ScrolledText(
-            sum_frame, height=20, width=60, font=(self.mono, 9), state="disabled"
+            sum_frame, height=20, width=60, font=self.mono, state="disabled"
         )
         sum_txt.grid(sticky="nsew")
         notebook.add(sum_frame, text="Summary")
@@ -642,7 +646,7 @@ class App:
             frame.columnconfigure(0, weight=1)
             frame.rowconfigure(0, weight=1)
             txt = scrolledtext.ScrolledText(
-                frame, height=30, width=100, font=(self.mono, 9), state="disabled"
+                frame, height=30, width=100, font=self.mono, state="disabled"
             )
             txt.grid(sticky="nsew")
             notebook.add(frame, text=log_path.name.replace("-ashlar.log", ""))
@@ -723,7 +727,7 @@ class App:
 
         from tkinter import scrolledtext
 
-        self.omero_box = scrolledtext.ScrolledText(tab, height=4, width=80, font=(self.mono, 9))
+        self.omero_box = scrolledtext.ScrolledText(tab, height=4, width=80, font=self.mono)
         self.omero_box.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(2, 4))
 
         obar = ttk.Frame(tab)
